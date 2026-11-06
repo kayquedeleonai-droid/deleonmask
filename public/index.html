@@ -321,6 +321,15 @@ async function loadCutter(w0=0, w1=1){
   const d=await fetchParts(st.models[decName],"recortador",w0+(w1-w0)*0.85,w1);
   setStatus("Iniciando o recortador…");
   [st.enc]=await makeSession(e); [st.dec]=await makeSession(d); st.cutter=kind; st.encName=encName;
+  if(kind==="sam2"){ // teste rápido: se o SAM 2.1 não roda bem neste computador, volta para o MobileSAM
+    setStatus("Testando o SAM 2.1 neste computador…");
+    const t0=performance.now();
+    const probe=st.enc.run({image:new ort.Tensor("float32", new Float32Array(3*SAMS*SAMS), [1,3,SAMS,SAMS])}).then(()=>true, e=>{ console.warn(e); return false; });
+    const ok=await Promise.race([probe, sleep(20000).then(()=>false)]);
+    if(!ok){ st.enc=null; st.dec=null; st.cutter=null; $("#cutter").value="mobile"; st.samFallback=true;
+      await loadCutter(w0,w1); setStatus("O SAM 2.1 ficou lento demais aqui; usando o MobileSAM. Para a melhor qualidade, use o pipeline na nuvem."); return; }
+    console.log("SAM 2.1 teste", Math.round(performance.now()-t0), "ms");
+  }
   $("#engineChip").textContent = (st.engine==="webgpu" ? "placa de vídeo (WebGPU)" : `processador (WASM${ort.env.wasm.numThreads>1?" ×"+ort.env.wasm.numThreads:""})`) + " · " + (kind==="sam2"?"SAM 2.1":"MobileSAM");
   setBar(0); setStatus("");
 }
