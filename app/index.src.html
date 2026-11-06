@@ -297,6 +297,8 @@ function loadEngine(){ return engineLoading ||= (async()=>{
   const y=await fetchParts(["m/yoloe_s.part0.wasm","m/yoloe_s.part1.wasm","m/yoloe_s.part2.wasm"],"detector de texto",.2,.6);
   setStatus("Iniciando o motor…");
   let ep; [st.yolo,ep]=await makeSession(y); st.engine=ep;
+  // sem placa de vídeo, o SAM 2.1 fica lento demais no processador: começa no MobileSAM (dá para trocar)
+  if(!st.cutterPicked) $("#cutter").value = ep==="webgpu" ? "sam2" : "mobile";
   await loadCutter(.6,1);
   $("#engineChip").className="chip on"; setBar(0); setStatus("");
 })().catch(e=>{ engineLoading=null; throw e; }); }
@@ -675,7 +677,8 @@ async function resegAll(){ const ref=st.ref, P=readParams(); const sc=view.width
 async function reseg(o){ const ref=st.ref; o.prev=null; await segmentObject(ref.cv, ref.W, ref.H, o, readParams(), null);
   // segunda passada com a própria máscara como guia: borda mais estável
   await segmentObject(ref.cv, ref.W, ref.H, o, readParams(), null); makeOverlay(o, view.width/ref.W); drawCurrent(); }
-$("#cutter").addEventListener("change", ()=>guarded(async()=>{ if(!engineLoading) return; await engineLoading; await loadCutter(); if(st.ref){ await resegAll(); renderObjs(); drawCurrent(); setStatus("Recortador trocado. Objetos recortados de novo."); } }));
+$("#cutter").addEventListener("change", ()=>guarded(async()=>{ st.cutterPicked=true;
+  if($("#cutter").value==="sam2" && st.engine && st.engine!=="webgpu") setStatus("Aviso: sem placa de vídeo o SAM 2.1 é bem mais lento. Para vídeos longos, use o pipeline na nuvem."); if(!engineLoading) return; await engineLoading; await loadCutter(); if(st.ref){ await resegAll(); renderObjs(); drawCurrent(); setStatus("Recortador trocado. Objetos recortados de novo."); } }));
 $("#testBtn").onclick=async()=>{ if(st.running) return; try{ await analyze(); }catch(e){ setStatus(e.message); console.error(e); } };
 
 function renderObjs(){
