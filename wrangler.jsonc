@@ -1,0 +1,8 @@
+{
+  // Site estático (Cloudflare Workers + Static Assets). Deploy: conectar este repositório no painel
+  // (Workers & Pages → Create → Import a repository) ou `npx wrangler deploy`.
+  "name": "deleonmask",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./public" },
+  "routes": [{ "pattern": "mask.kayquedeleon.app", "custom_domain": true }]
+}

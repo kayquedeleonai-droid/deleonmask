@@ -1,0 +1,785 @@
+<title>DeLeon Mask</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: bancada de finalização — monitor fixo à esquerda, rack de controles rolando à direita */
+:root{
+  --bg:#101113; --panel:#17181b; --panel2:#1e2024; --line:#2a2d33; --fg:#e9e7e2; --mute:#8d9099;
+  --tally:#ffb547; --tally-ink:#1a1206; --matte:#ff4d4d; --ok:#5fd18b; --bad:#ff6b6b;
+  --sans:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --bg:#f3f2ef; --panel:#ffffff; --panel2:#f0efeb; --line:#dcdad4; --fg:#16171a; --mute:#646770;
+  --tally:#c97a00; --tally-ink:#ffffff; --matte:#e0302f; --ok:#1f8f4e; --bad:#c62828; color-scheme:light}}
+:root[data-theme="light"]{
+  --bg:#f3f2ef; --panel:#ffffff; --panel2:#f0efeb; --line:#dcdad4; --fg:#16171a; --mute:#646770;
+  --tally:#c97a00; --tally-ink:#ffffff; --matte:#e0302f; --ok:#1f8f4e; --bad:#c62828; color-scheme:light}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--sans);font-size:14px;line-height:1.45;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 40px}
+header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.brand{font-weight:700;font-size:20px;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+.brand i{display:inline-block;width:22px;height:22px;border-radius:4px;background:linear-gradient(90deg,var(--fg) 50%,#000 50%);border:1px solid var(--line)}
+.sub{color:var(--mute);font-size:13px}
+.spacer{flex:1}
+.chip{font-family:var(--mono);font-size:11.5px;padding:4px 8px;border-radius:999px;border:1px solid var(--line);color:var(--mute);white-space:nowrap}
+.chip.on{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 50%,transparent)}
+.chip.warn{color:var(--tally);border-color:color-mix(in srgb,var(--tally) 50%,transparent)}
+main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,1fr);gap:16px;align-items:start}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+.monitor{position:sticky;top:env(safe-area-inset-top,0px);display:flex;flex-direction:column;gap:8px;min-width:0}
+@media (max-width:900px){.monitor{position:static}}
+.screen{position:relative;background:#000;border:1px solid var(--line);border-radius:6px;overflow:hidden;aspect-ratio:16/9;display:grid;place-items:center}
+.screen canvas{width:100%;height:100%;object-fit:contain;display:block}
+.screen .msg{position:absolute;inset:auto 0 0 0;padding:8px 10px;font-family:var(--mono);font-size:12px;color:#ddd;background:linear-gradient(transparent,rgba(0,0,0,.75))}
+.drop{position:absolute;inset:0;display:grid;place-items:center;border:2px dashed var(--tally);background:rgba(0,0,0,.6);color:#fff;font-weight:600;font-size:16px}
+.transport{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.transport input[type=range]{flex:1;min-width:140px}
+.tc{font-family:var(--mono);font-size:12px;color:var(--mute);font-variant-numeric:tabular-nums;min-width:150px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0;background:transparent;color:var(--mute);padding:6px 10px}
+.seg button[aria-pressed=true]{background:var(--panel2);color:var(--fg)}
+button{font:inherit;font-weight:600;color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--mute)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--tally);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--tally);color:var(--tally-ink);border-color:var(--tally)}
+.rack{display:flex;flex-direction:column;gap:12px;min-width:0}
+section.p{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+section.p h2{margin:0;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--mute);font-weight:600;display:flex;gap:8px;align-items:center}
+section.p h2 b{font-family:var(--mono);color:var(--tally);font-weight:500}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px 12px;font-family:var(--mono);font-size:12px}
+.meta div span{display:block;color:var(--mute);font-family:var(--sans);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input[type=text]{flex:1;min-width:0;font:inherit;font-size:15px;color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:9px 11px}
+.hint{color:var(--mute);font-size:12.5px;margin:0}
+.terms{display:flex;flex-wrap:wrap;gap:6px}
+.term{font-size:12.5px;border-radius:5px;padding:4px 8px;border:1px solid var(--line);display:inline-flex;gap:6px;align-items:center}
+.term.ok{border-color:color-mix(in srgb,var(--ok) 55%,transparent)}
+.term.neg{border-color:color-mix(in srgb,var(--matte) 60%,transparent)}
+.term.miss{border-color:color-mix(in srgb,var(--bad) 70%,transparent);color:var(--bad)}
+.term code{font-family:var(--mono);font-size:11.5px;color:var(--mute)}
+.sugg button{padding:2px 7px;font-size:12px;font-weight:500}
+.objs{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}
+.obj{display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 6px;border-radius:5px}
+.obj:hover{background:var(--panel2)}
+.obj .n{font-family:var(--mono);color:var(--tally);width:28px}
+.obj .c{font-family:var(--mono);color:var(--mute);margin-left:auto}
+.ctl{display:grid;grid-template-columns:130px minmax(0,1fr) 54px;gap:8px;align-items:center;font-size:13px}
+.ctl output{font-family:var(--mono);font-size:12px;text-align:right;color:var(--mute)}
+.ctl input[type=range]{width:100%}
+label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
+.bar{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.bar i{display:block;height:100%;width:0;background:var(--tally);transition:width .2s}
+.status{font-family:var(--mono);font-size:12px;color:var(--mute);min-height:1.4em;white-space:pre-wrap}
+.checks{display:grid;gap:4px;font-size:13px}
+.checks div::before{content:"● ";color:var(--mute)}
+.checks .y::before{color:var(--ok)} .checks .n::before{color:var(--bad)}
+.foot{color:var(--mute);font-size:12px;margin-top:16px;max-width:75ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header>
+  <div class="brand"><i aria-hidden="true"></i>DeLeon Mask</div>
+  <div class="sub">Máscara preto e branco por prompt, frame a frame</div>
+  <div class="spacer"></div>
+  <span class="chip" id="engineChip">motor: não carregado</span>
+</header>
+
+<main>
+  <div class="monitor">
+    <div class="screen" id="screen">
+      <canvas id="view" width="640" height="360" aria-label="Monitor"></canvas>
+      <div class="msg" id="viewMsg">Carregando exemplo…</div>
+      <div class="drop" id="dropHint" hidden>Solte o vídeo aqui</div>
+    </div>
+    <div class="transport">
+      <button id="playBtn" aria-label="Tocar">▶</button>
+      <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Frame">
+      <span class="tc" id="tc">frame 0 / 0</span>
+      <div class="seg" role="group" aria-label="Modo de visualização">
+        <button data-v="orig" aria-pressed="false">Original</button>
+        <button data-v="over" aria-pressed="true">Sobreposição</button>
+        <button data-v="mask" aria-pressed="false">Máscara</button>
+      </div>
+    </div>
+    <video id="vid" playsinline muted hidden></video>
+  </div>
+
+  <div class="rack">
+    <section class="p" aria-labelledby="h1">
+      <h2 id="h1"><b>01</b> Vídeo</h2>
+      <div class="row">
+        <button id="pickBtn">Escolher vídeo…</button>
+        <input type="file" id="file" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v" hidden>
+        <span class="hint" id="fileName">exemplo.mp4 (exemplo)</span>
+      </div>
+      <div class="meta" id="meta"></div>
+      <p class="hint">MP4 ou MOV (H.264/HEVC). Você também pode arrastar o arquivo para o monitor.</p>
+    </section>
+
+    <section class="p" aria-labelledby="h2">
+      <h2 id="h2"><b>02</b> O que vira máscara</h2>
+      <div class="row">
+        <input type="text" id="prompt" value="pessoa" aria-label="Prompt" placeholder="ex.: pessoa, -microfone">
+        <button id="testBtn">Testar neste frame</button>
+      </div>
+      <p class="hint">Separe por vírgula. Use <b>-</b> para tirar: <code>pessoa, -microfone</code>. Português ou inglês.</p>
+      <div class="terms" id="terms"></div>
+      <div class="row">
+        <span class="hint">Objetos:</span>
+        <div class="seg" role="group" aria-label="Quais objetos">
+          <button data-sel="all" aria-pressed="true">Todos</button>
+          <button data-sel="pick" aria-pressed="false">Só os marcados</button>
+        </div>
+      </div>
+      <div class="objs" id="objs"><p class="hint">Clique em “Testar neste frame” para ver o que o modelo encontra. Depois clique nos objetos no monitor para marcar.</p></div>
+    </section>
+
+    <section class="p" aria-labelledby="h3">
+      <h2 id="h3"><b>03</b> Qualidade e acabamento</h2>
+      <div class="row">
+        <span class="hint">Qualidade:</span>
+        <div class="seg" role="group" aria-label="Qualidade">
+          <button data-q="fast" aria-pressed="false">Rápida</button>
+          <button data-q="high" aria-pressed="true">Alta (recorte)</button>
+        </div>
+      </div>
+      <div class="ctl"><label for="conf">Confiança</label><input type="range" id="conf" min="0.05" max="0.9" step="0.01" value="0.30"><output for="conf"></output></div>
+      <div class="ctl"><label for="edge">Refinar borda</label><input type="range" id="edge" min="0" max="12" step="1" value="4"><output for="edge"></output></div>
+      <div class="ctl"><label for="grow">Expandir / contrair</label><input type="range" id="grow" min="-20" max="20" step="1" value="0"><output for="grow"></output></div>
+      <div class="ctl"><label for="feather">Suavizar borda</label><input type="range" id="feather" min="0" max="20" step="0.5" value="0"><output for="feather"></output></div>
+      <div class="ctl"><label for="smooth">Estabilizar (±frames)</label><input type="range" id="smooth" min="0" max="3" step="1" value="0"><output for="smooth"></output></div>
+      <div class="ctl"><label for="hold">Segurar se sumir</label><input type="range" id="hold" min="0" max="15" step="1" value="4"><output for="hold"></output></div>
+      <label class="ck"><input type="checkbox" id="hard"> Borda dura (só preto e branco puros)</label>
+      <label class="ck"><input type="checkbox" id="invert"> Inverter (alvo preto, fundo branco)</label>
+    </section>
+
+    <section class="p" aria-labelledby="h4">
+      <h2 id="h4"><b>04</b> Gerar e exportar</h2>
+      <label class="ck"><input type="checkbox" id="outMp4" checked> Vídeo da máscara (MP4 H.264, mesmos tempos de frame)</label>
+      <label class="ck"><input type="checkbox" id="outPng" checked> Sequência PNG 8-bit (1 por frame, numerada do 00000)</label>
+      <div class="row">
+        <button class="primary" id="runBtn">Gerar máscaras</button>
+        <button id="stopBtn" disabled>Parar</button>
+        <button id="saveBtn" disabled>Baixar ZIP</button>
+      </div>
+      <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+      <div class="status" id="status" role="status"></div>
+      <div class="checks" id="checks"></div>
+    </section>
+  </div>
+</main>
+<p class="foot">Tudo roda no seu computador (placa de vídeo pelo WebGPU, ou processador se não houver). O vídeo não sai da sua máquina. Na primeira vez o motor baixa cerca de 70 MB. ProRes e recorte com canal alfa: peça no chat, pelo pipeline na nuvem.</p>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+"use strict";
+const PT_EN = {"pessoa": "person", "pessoas": "person", "gente": "person", "homem": "person", "mulher": "person", "criança": "person", "crianca": "person", "bebê": "person", "bebe": "person", "menino": "person", "menina": "person", "rosto": "face", "cara": "face", "cabeça": "head", "cabeca": "head", "cabelo": "hair", "olho": "eye", "olhos": "eye", "boca": "mouth", "mão": "hand", "mao": "hand", "mãos": "hand", "maos": "hand", "braço": "arm", "braco": "arm", "perna": "leg", "pé": "foot", "pe": "foot", "corpo": "person", "roupa": "clothing", "camisa": "shirt", "camiseta": "t-shirt", "calça": "pants", "calca": "pants", "bermuda": "shorts", "short": "shorts", "vestido": "dress", "jaqueta": "jacket", "casaco": "coat", "sapato": "shoe", "tênis": "sneaker", "tenis": "sneaker", "chinelo": "sandal", "chapéu": "hat", "chapeu": "hat", "boné": "cap", "bone": "cap", "óculos": "glasses", "oculos": "glasses", "bolsa": "bag", "mochila": "backpack", "relógio": "watch", "relogio": "watch", "carro": "car", "carros": "car", "moto": "motorcycle", "motocicleta": "motorcycle", "bicicleta": "bicycle", "bike": "bicycle", "ônibus": "bus", "onibus": "bus", "caminhão": "truck", "caminhao": "truck", "avião": "airplane", "aviao": "airplane", "barco": "boat", "trem": "train", "roda": "wheel", "pneu": "tire", "cachorro": "dog", "cão": "dog", "cao": "dog", "gato": "cat", "cavalo": "horse", "pássaro": "bird", "passaro": "bird", "ave": "bird", "peixe": "fish", "vaca": "cow", "árvore": "tree", "arvore": "tree", "árvores": "tree", "planta": "plant", "flor": "flower", "flores": "flower", "grama": "grass", "folha": "leaf", "céu": "sky", "ceu": "sky", "nuvem": "cloud", "nuvens": "cloud", "mar": "sea", "água": "water", "agua": "water", "praia": "beach", "areia": "sand", "montanha": "mountain", "chão": "floor", "chao": "floor", "parede": "wall", "teto": "ceiling", "prédio": "building", "predio": "building", "casa": "house", "janela": "window", "porta": "door", "rua": "road", "estrada": "road", "calçada": "sidewalk", "placa": "sign", "letreiro": "sign", "logo": "logo", "logotipo": "logo", "texto": "text", "tela": "screen", "monitor": "monitor", "televisão": "television", "televisao": "television", "tv": "television", "celular": "cell phone", "telefone": "phone", "notebook": "laptop", "computador": "computer", "teclado": "keyboard", "câmera": "camera", "camera": "camera", "microfone": "microphone", "caixa de som": "speaker", "alto-falante": "speaker", "fone": "headphones", "violão": "guitar", "violao": "guitar", "guitarra": "electric guitar", "cadeira": "chair", "mesa": "table", "sofá": "sofa", "sofa": "sofa", "cama": "bed", "garrafa": "bottle", "copo": "cup", "xícara": "mug", "xicara": "mug", "prato": "plate", "comida": "food", "bola": "ball", "luminária": "lamp", "luminaria": "lamp", "lâmpada": "light bulb", "lampada": "light bulb", "cortina": "curtain", "vaso": "vase", "tripé": "tripod", "tripe": "tripod", "bandeira": "flag", "guarda-chuva": "umbrella", "guarda-sol": "umbrella", "fogo": "fire", "fumaça": "smoke", "fumaca": "smoke", "produto": "product", "caixa": "box", "lata": "can", "cartão": "card", "cartao": "card", "dinheiro": "money", "moeda": "coin", "ímã": "magnet", "ima": "magnet"};
+const $ = s => document.querySelector(s);
+const S = 640, NSLOT = 8, NA = 8400, PROTO = 160;
+const st = {
+  vocab:null, vocabIdx:null, pe:null, session:null, engine:null,
+  video:null,      // {name, buf, samples, cfg, W, H, rot, timescale, nFrames, fps, codec}
+  previewFrames:[],// ImageBitmap thumbnails of source (optional)
+  results:null,    // {thumbs:[Uint8Array], tw, th, ts:[]}
+  view:"over", sel:"all", quality:"high",
+  test:null,       // {frameIdx, dets, picked:Set, W,H}
+  zipBlob:null, running:false, stop:false,
+};
+
+/* ---------------- util ---------------- */
+const norm = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+function setStatus(t){ $("#status").textContent = t; }
+function setBar(f){ $("#bar").style.width = (Math.max(0,Math.min(1,f))*100).toFixed(1)+"%"; }
+function fmtTime(s){ if(!isFinite(s)) return "–"; const m=Math.floor(s/60), r=Math.round(s%60); return m? `${m} min ${r}s` : `${r}s`; }
+function base(name){ return (name||"video").replace(/\.[^.]+$/,"").replace(/[^\w\-]+/g,"_"); }
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+/* ---------------- vocabulário + prompt ---------------- */
+const PT_N = {}; for (const [k,v] of Object.entries(PT_EN)) PT_N[norm(k)] = v;
+function lev(a,b){ const m=a.length,n=b.length; if(Math.abs(m-n)>3) return 9; const d=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){ let p=d[0]; d[0]=i; for(let j=1;j<=n;j++){ const t=d[j]; d[j]=Math.min(d[j]+1,d[j-1]+1,p+(a[i-1]===b[j-1]?0:1)); p=t; } } return d[n]; }
+function resolveTerm(raw){
+  const sign = raw.trim().startsWith("-") ? -1 : 1;
+  const label = raw.replace(/^[\s+\-]+/,"").trim();
+  const n = norm(label);
+  let en = PT_N[n] ?? n;
+  if(!st.vocabIdx) return {label, sign, en, idx:-1, sugg:[]};
+  let idx = st.vocabIdx.get(en);
+  if(idx===undefined && PT_N[n]===undefined){ // tenta palavra a palavra
+    const w = n.split(/\s+/).map(x=>PT_N[x]??x).join(" "); if(st.vocabIdx.has(w)){ en=w; idx=st.vocabIdx.get(w); }
+  }
+  if(idx===undefined && en.endsWith("s") && st.vocabIdx.has(en.slice(0,-1))){ en=en.slice(0,-1); idx=st.vocabIdx.get(en); }
+  let sugg=[];
+  if(idx===undefined){
+    const cand=[];
+    for(const v of st.vocab){ let sc = v.startsWith(en)?0.5 : v.includes(en)?1 : lev(en,v); if(sc<=2) cand.push([sc,v.length,v]); }
+    cand.sort((a,b)=>a[0]-b[0]||a[1]-b[1]); sugg = cand.slice(0,6).map(c=>c[2]);
+  }
+  return {label, sign, en, idx: idx===undefined?-1:idx, sugg};
+}
+function parsePrompt(){
+  const parts = $("#prompt").value.split(/[,;]/).map(s=>s.trim()).filter(Boolean);
+  return parts.map(resolveTerm);
+}
+function renderTerms(){
+  const ts = parsePrompt(); const box=$("#terms"); box.textContent="";
+  for(const t of ts){
+    const el=document.createElement("span");
+    el.className="term "+(t.idx<0?"miss":t.sign<0?"neg":"ok");
+    const a=document.createElement("span"); a.textContent=(t.sign<0?"− ":"+ ")+t.label; el.append(a);
+    const c=document.createElement("code"); c.textContent = t.idx<0 ? (st.vocab? "não conheço" : "…") : (norm(t.label)!==t.en? "→ "+t.en : "ok"); el.append(c);
+    if(t.idx<0 && t.sugg.length){
+      const sg=document.createElement("span"); sg.className="sugg";
+      for(const s of t.sugg){ const b=document.createElement("button"); b.type="button"; b.textContent=s; b.onclick=()=>{
+        const parts=$("#prompt").value.split(/[,;]/); const i=parts.findIndex(p=>p.trim()&&resolveTerm(p).label===t.label);
+        if(i>=0){ parts[i]=(t.sign<0?" -":" ")+s; $("#prompt").value=parts.map(x=>x.trim()).join(", "); renderTerms(); } };
+        sg.append(b);} el.append(sg);
+    }
+    box.append(el);
+  }
+  return ts;
+}
+$("#prompt").addEventListener("input", ()=>{ renderTerms(); st.test=null; drawCurrent(); });
+
+/* ---------------- arquivos do motor ---------------- */
+async function fetchParts(names, label, w0, w1){
+  const bufs=[]; let got=0;
+  for(const n of names){
+    let r; try{ const c = await caches.open("deleon-mask-v1"); r = await c.match(n); if(!r){ const f=await fetch(n); if(!f.ok) throw new Error(n+" "+f.status); await c.put(n, f.clone()); r=f; } }
+    catch(e){ r = await fetch(n); if(!r.ok) throw new Error(`Não consegui baixar ${n} (${r.status})`); }
+    const b = new Uint8Array(await r.arrayBuffer()); bufs.push(b); got++;
+    setBar(w0 + (w1-w0)*got/names.length); setStatus(`Baixando ${label}… ${got}/${names.length}`);
+  }
+  const len=bufs.reduce((a,b)=>a+b.length,0), out=new Uint8Array(len); let o=0; for(const b of bufs){ out.set(b,o); o+=b.length; } return out;
+}
+async function loadVocab(){
+  if(st.vocab) return;
+  st.vocab = await (await fetch("m/vocab.json")).json();
+  st.vocabIdx = new Map(st.vocab.map((v,i)=>[v,i]));
+  renderTerms();
+}
+async function loadEngine(){
+  if(st.session) return;
+  await loadVocab();
+  $("#engineChip").textContent="motor: baixando…"; $("#engineChip").className="chip warn";
+  const peBytes = await fetchParts(["m/vocab_pe.wasm"], "vocabulário", 0, .05);
+  st.pe = new Uint16Array(peBytes.buffer);
+  if(window.DLM_STANDALONE){
+    // site próprio (mask.kayquedeleon.app): runtime servido inteiro, com várias threads quando a página é isolada
+    ort.env.wasm.wasmPaths = new URL("vendor/", location.href).href;
+    ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(8, navigator.hardwareConcurrency||4) : 1;
+  } else {
+    // artefato do Claude: binários só como arquivos .wasm de até 15 MB → junta as partes aqui
+    const wasm = await fetchParts(["m/ortjsep.part0.wasm","m/ortjsep.part1.wasm"], "runtime", .05, .35);
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.wasmPaths = { mjs: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort-wasm-simd-threaded.jsep.mjs" };
+    ort.env.wasm.wasmBinary = wasm.buffer;
+  }
+  const model = await fetchParts(["m/yoloe_s.part0.wasm","m/yoloe_s.part1.wasm","m/yoloe_s.part2.wasm"], "modelo", .35, 1);
+  setStatus("Iniciando o motor…");
+  const tries = ("gpu" in navigator) ? ["webgpu","wasm"] : ["wasm"];
+  let lastErr;
+  for(const ep of tries){
+    try{ st.session = await ort.InferenceSession.create(model, {executionProviders:[ep], graphOptimizationLevel:"all"}); st.engine=ep; break; }
+    catch(e){ lastErr=e; console.warn(ep, e); }
+  }
+  if(!st.session) throw new Error("O motor não iniciou neste navegador: "+(lastErr&&lastErr.message));
+  $("#engineChip").textContent = st.engine==="webgpu" ? "motor: placa de vídeo (WebGPU)" : "motor: processador (WASM)";
+  $("#engineChip").className = "chip on";
+  setBar(0); setStatus("");
+}
+function f16(h){ const s=(h&0x8000)?-1:1, e=(h>>10)&31, f=h&1023; if(e===0) return s*Math.pow(2,-14)*(f/1024); if(e===31) return f?NaN:s*Infinity; return s*Math.pow(2,e-15)*(1+f/1024); }
+function buildTpe(terms){
+  const t=new Float32Array(NSLOT*512);
+  const use=terms.slice(0,NSLOT);
+  for(let k=0;k<NSLOT;k++){ const src=use[Math.min(k,use.length-1)].idx*512; for(let j=0;j<512;j++) t[k*512+j]=f16(st.pe[src+j]); }
+  return new ort.Tensor("float32", t, [1,NSLOT,512]);
+}
+
+/* ---------------- vídeo: demux + decode exatos ---------------- */
+async function openVideo(file){
+  const buf = await file.arrayBuffer();
+  const mp4 = MP4Box.createFile();
+  const info = await new Promise((res,rej)=>{
+    mp4.onError = e=>rej(new Error("Arquivo não reconhecido como MP4/MOV."));
+    mp4.onReady = res;
+    const b = buf.slice(0); b.fileStart = 0; mp4.appendBuffer(b); mp4.flush();
+  });
+  const tr = info.videoTracks[0]; if(!tr) throw new Error("O arquivo não tem trilha de vídeo.");
+  const samples = await new Promise(res=>{
+    const all=[]; mp4.onSamples=(id,u,ss)=>{ all.push(...ss); if(all.length>=tr.nb_samples) res(all); };
+    mp4.setExtractionOptions(tr.id, null, {nbSamples: 1e9}); mp4.start();
+    setTimeout(()=>res(all), 4000);
+  });
+  const trak = mp4.getTrackById(tr.id); let description;
+  for(const e of trak.mdia.minf.stbl.stsd.entries){ const bx=e.avcC||e.hvcC||e.vpcC||e.av1C; if(bx){ const s=new DataStream(undefined,0,DataStream.BIG_ENDIAN); bx.write(s); description=new Uint8Array(s.buffer,8); break; } }
+  const cfg = {codec: tr.codec.startsWith("vp08")?"vp8":tr.codec, codedWidth: tr.video.width, codedHeight: tr.video.height, description};
+  const sup = await VideoDecoder.isConfigSupported(cfg).catch(()=>({supported:false}));
+  if(!sup.supported) throw new Error(`Este navegador não decodifica ${tr.codec}. Tente Chrome/Edge ou exporte em H.264.`);
+  const m = tr.matrix || [65536,0,0,0,65536,0,0,0,1073741824];
+  let rot = Math.round(Math.atan2(m[1], m[0])*180/Math.PI); rot = ((rot%360)+360)%360;
+  const cw=tr.video.width, ch=tr.video.height;
+  const W = (rot===90||rot===270)? ch : cw, H = (rot===90||rot===270)? cw : ch;
+  const ts = samples.map(s=>s.cts/s.timescale).sort((a,b)=>a-b);
+  const dur = (ts[ts.length-1]-ts[0]) + samples[samples.length-1].duration/samples[0].timescale;
+  const fps = samples.length / dur;
+  return {name:file.name, file, samples, cfg, W, H, rot, nFrames:samples.length, fps, dur, codec:tr.codec, timescale:tr.timescale};
+}
+async function* decodeAll(v){
+  const q=[]; let wake=null, err=null, flushed=false, done=false;
+  const ping=()=>{ if(wake){ const w=wake; wake=null; w(); } };
+  const dec = new VideoDecoder({output:f=>{ q.push(f); ping(); }, error:e=>{ err=e; ping(); }});
+  dec.configure(v.cfg);
+  let si=0, out=0;
+  const chunk = s => new EncodedVideoChunk({type:s.is_sync?"key":"delta", timestamp:Math.round(1e6*s.cts/s.timescale), duration:Math.round(1e6*s.duration/s.timescale), data:s.data});
+  try{
+    while(out < v.nFrames){
+      if(err) throw err;
+      while(si<v.nFrames && q.length + dec.decodeQueueSize < 8){ dec.decode(chunk(v.samples[si++])); }
+      if(si===v.nFrames && !flushed){ flushed=true; dec.flush().then(()=>{ done=true; ping(); }, e=>{ err=e; ping(); }); }
+      if(!q.length){ if(done) break; await new Promise(r=>{ wake=r; setTimeout(ping,200); }); continue; }
+      out++; yield q.shift();
+    }
+  } finally { for(const f of q) f.close(); try{ dec.close(); }catch(e){} }
+}
+function drawFrame(vf, ctx, W, H, rot){
+  ctx.save(); ctx.setTransform(1,0,0,1,0,0);
+  if(rot===90){ ctx.translate(W,0); ctx.rotate(Math.PI/2); }
+  else if(rot===180){ ctx.translate(W,H); ctx.rotate(Math.PI); }
+  else if(rot===270){ ctx.translate(0,H); ctx.rotate(-Math.PI/2); }
+  ctx.drawImage(vf, 0, 0); ctx.restore();
+}
+
+/* ---------------- inferência ---------------- */
+const lbC = new OffscreenCanvas(S,S), lbX = lbC.getContext("2d",{willReadFrequently:true});
+function letterbox(srcCanvas, rx, ry, rw, rh){
+  const s = Math.min(S/rw, S/rh), nw=rw*s, nh=rh*s, px=(S-nw)/2, py=(S-nh)/2;
+  lbX.fillStyle="rgb(114,114,114)"; lbX.fillRect(0,0,S,S);
+  lbX.imageSmoothingQuality="high"; lbX.drawImage(srcCanvas, rx, ry, rw, rh, px, py, nw, nh);
+  const d = lbX.getImageData(0,0,S,S).data, x=new Float32Array(3*S*S), A=S*S;
+  for(let i=0,p=0;i<A;i++,p+=4){ x[i]=d[p]/255; x[A+i]=d[p+1]/255; x[2*A+i]=d[p+2]/255; }
+  return {tensor:new ort.Tensor("float32",x,[1,3,S,S]), s, px, py, rx, ry, rw, rh};
+}
+function iou(a,b){ const x1=Math.max(a[0],b[0]),y1=Math.max(a[1],b[1]),x2=Math.min(a[2],b[2]),y2=Math.min(a[3],b[3]); const i=Math.max(0,x2-x1)*Math.max(0,y2-y1); const u=(a[2]-a[0])*(a[3]-a[1])+(b[2]-b[0])*(b[3]-b[1])-i; return u>0?i/u:0; }
+async function infer(lb, nT, conf){
+  const r = await st.session.run({images: lb.tensor, tpe: st._tpe});
+  const o = r.output0.data, proto = r.output1.data;
+  const dets=[];
+  for(let a=0;a<NA;a++){
+    let bk=-1, bs=conf;
+    for(let k=0;k<nT;k++){ const sc=o[(4+k)*NA+a]; if(sc>bs){ bs=sc; bk=k; } }
+    if(bk<0) continue;
+    const cx=o[a], cy=o[NA+a], w=o[2*NA+a], h=o[3*NA+a];
+    dets.push({k:bk, conf:bs, b:[cx-w/2, cy-h/2, cx+w/2, cy+h/2], a});
+  }
+  dets.sort((p,q)=>q.conf-p.conf);
+  const keep=[];
+  for(const d of dets){ if(keep.every(e=>e.k!==d.k || iou(e.b,d.b)<0.6)) keep.push(d); if(keep.length>=200) break; }
+  for(const d of keep){
+    d.coef = new Float32Array(32); for(let j=0;j<32;j++) d.coef[j]=o[(4+NSLOT+j)*NA+d.a];
+    // caixa em coordenadas do quadro (ou do recorte)
+    d.fb = [ (d.b[0]-lb.px)/lb.s + lb.rx, (d.b[1]-lb.py)/lb.s + lb.ry, (d.b[2]-lb.px)/lb.s + lb.rx, (d.b[3]-lb.py)/lb.s + lb.ry ];
+  }
+  return {dets:keep, proto, lb};
+}
+const m160 = new OffscreenCanvas(PROTO,PROTO), m160x = m160.getContext("2d",{willReadFrequently:true});
+const m160img = m160x.createImageData(PROTO,PROTO);
+function detMaskTo(ctx, det, proto, lb, tW, tH){
+  // máscara do objeto no espaço 160 (só dentro da caixa) -> desenha escalada no destino com "lighten"
+  const id=m160img.data; id.fill(0); for(let i=3;i<id.length;i+=4) id[i]=255;
+  const q=PROTO/S, A=PROTO*PROTO;
+  const x0=Math.max(0,Math.floor(det.b[0]*q)), y0=Math.max(0,Math.floor(det.b[1]*q)), x1=Math.min(PROTO,Math.ceil(det.b[2]*q)), y1=Math.min(PROTO,Math.ceil(det.b[3]*q));
+  for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++){
+    const p=y*PROTO+x; let v=0; for(let j=0;j<32;j++) v+=det.coef[j]*proto[j*A+p];
+    const m=255/(1+Math.exp(-v)); const o=p*4; id[o]=id[o+1]=id[o+2]=m;
+  }
+  m160x.putImageData(m160img,0,0);
+  const sx=lb.px*q, sy=lb.py*q, sw=lb.rw*lb.s*q, sh=lb.rh*lb.s*q;
+  ctx.globalCompositeOperation="lighten"; ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
+  ctx.drawImage(m160, sx, sy, sw, sh, lb.rx, lb.ry, lb.rw, lb.rh);
+  ctx.globalCompositeOperation="source-over";
+}
+
+/* ---------------- pós-processamento ---------------- */
+function boxBlur(src, W, H, r, out){ // média em janela (2r+1)^2 via integral separável
+  const tmp=new Float32Array(W*H); out=out||new Float32Array(W*H);
+  for(let y=0;y<H;y++){ const o=y*W; let acc=0; const n=2*r+1;
+    for(let x=-r;x<=r;x++) acc+=src[o+Math.min(W-1,Math.max(0,x))];
+    for(let x=0;x<W;x++){ tmp[o+x]=acc/n; acc+=src[o+Math.min(W-1,x+r+1)]-src[o+Math.max(0,x-r)]; } }
+  for(let x=0;x<W;x++){ let acc=0; const n=2*r+1;
+    for(let y=-r;y<=r;y++) acc+=tmp[Math.min(H-1,Math.max(0,y))*W+x];
+    for(let y=0;y<H;y++){ out[y*W+x]=acc/n; acc+=tmp[Math.min(H-1,y+r+1)*W+x]-tmp[Math.max(0,y-r)*W+x]; } }
+  return out;
+}
+function guided(I, p, W, H, r, eps){
+  const N=W*H, Ip=new Float32Array(N), II=new Float32Array(N);
+  for(let i=0;i<N;i++){ Ip[i]=I[i]*p[i]; II[i]=I[i]*I[i]; }
+  const mI=boxBlur(I,W,H,r), mp=boxBlur(p,W,H,r), mIp=boxBlur(Ip,W,H,r), mII=boxBlur(II,W,H,r);
+  const a=Ip, b=II;
+  for(let i=0;i<N;i++){ const cov=mIp[i]-mI[i]*mp[i], v=mII[i]-mI[i]*mI[i]; a[i]=cov/(v+eps); b[i]=mp[i]-a[i]*mI[i]; }
+  const ma=boxBlur(a,W,H,r), mb=boxBlur(b,W,H,r);
+  for(let i=0;i<N;i++){ let q=(ma[i]*I[i]+mb[i]-0.2)/0.6; p[i]=q<0?0:q>1?1:q; } // níveis: corta o rastro fraco do filtro, mantém 1–3 px de antisserrilhado
+  return p;
+}
+function morph(bin, W, H, r, dilate){ // filtro máx/mín separável (quadrado)
+  const tmp=new Uint8Array(W*H), out=new Uint8Array(W*H), f=dilate?Math.max:Math.min;
+  for(let y=0;y<H;y++){ const o=y*W; for(let x=0;x<W;x++){ let v=dilate?0:1; for(let k=Math.max(0,x-r);k<=Math.min(W-1,x+r);k++){ v=f(v,bin[o+k]); if(v===(dilate?1:0)) break; } tmp[o+x]=v; } }
+  for(let x=0;x<W;x++){ for(let y=0;y<H;y++){ let v=dilate?0:1; for(let k=Math.max(0,y-r);k<=Math.min(H-1,y+r);k++){ v=f(v,tmp[k*W+x]); if(v===(dilate?1:0)) break; } out[y*W+x]=v; } }
+  return out;
+}
+function finish(q, W, H, P){ // q Float32 0..1 -> Uint8 0..255
+  let m=q;
+  if(P.grow!==0){ const bin=new Uint8Array(W*H); for(let i=0;i<W*H;i++) bin[i]=m[i]>=0.5?1:0; const r=morph(bin,W,H,Math.abs(P.grow),P.grow>0); m=new Float32Array(W*H); for(let i=0;i<W*H;i++) m[i]=r[i]; }
+  else if(P.hard){ m=new Float32Array(W*H); for(let i=0;i<W*H;i++) m[i]=q[i]>=0.5?1:0; }
+  if(P.feather>0){ const r=Math.max(1,Math.round(P.feather)); m=boxBlur(boxBlur(boxBlur(m,W,H,r),W,H,r),W,H,r); }
+  const out=new Uint8Array(W*H);
+  for(let i=0;i<W*H;i++){ let v=m[i]; if(P.invert) v=1-v; out[i]= v<=0?0: v>=1?255 : Math.round(v*255); }
+  return out;
+}
+
+/* ---------------- máscara de um frame ---------------- */
+function readParams(){
+  return { conf:+$("#conf").value, edge:+$("#edge").value, grow:+$("#grow").value, feather:+$("#feather").value,
+           smooth:+$("#smooth").value, hold:+$("#hold").value, hard:$("#hard").checked, invert:$("#invert").checked, quality:st.quality };
+}
+function makeCanvases(W,H){
+  const fc=new OffscreenCanvas(W,H), pc=new OffscreenCanvas(W,H), nc=new OffscreenCanvas(W,H);
+  return {fc, fx:fc.getContext("2d",{willReadFrequently:true}), pc, px:pc.getContext("2d",{willReadFrequently:true}), nc, nx:nc.getContext("2d",{willReadFrequently:true})};
+}
+async function maskForFrame(cv, W, H, terms, P, chosen /* null=todos | [{b:[..], k}] */, memo){
+  const nT=Math.min(terms.length,NSLOT);
+  const full = letterbox(cv.fc, 0, 0, W, H);
+  const R = await infer(full, nT, chosen? Math.min(P.conf,0.15) : P.conf);
+  let pos = R.dets.filter(d=>terms[d.k].sign>0), neg = R.dets.filter(d=>terms[d.k].sign<0);
+  if(chosen){ // segue os objetos marcados: melhor IoU com a última caixa conhecida
+    const picked=[];
+    for(const c of chosen){ let best=null, bi=0.2; for(const d of pos){ if(d.k!==c.k) continue; const v=iou(d.fb,c.b); if(v>bi){ bi=v; best=d; } } if(best){ picked.push(best); c.b=best.fb; c.miss=0; } else c.miss=(c.miss||0)+1; }
+    pos = picked.filter(d=>d.conf>=Math.min(P.conf,0.15));
+  }
+  cv.px.globalCompositeOperation="source-over"; cv.px.fillStyle="#000"; cv.px.fillRect(0,0,W,H);
+  cv.nx.fillStyle="#000"; cv.nx.fillRect(0,0,W,H);
+  // refino por recorte: roda o modelo de novo num recorte ampliado de cada objeto (até 6 maiores)
+  const refine = P.quality==="high" ? new Set(pos.slice().sort((a,b)=>(b.fb[2]-b.fb[0])*(b.fb[3]-b.fb[1])-(a.fb[2]-a.fb[0])*(a.fb[3]-a.fb[1])).slice(0,6)) : new Set();
+  for(const d of pos){
+    const bw=d.fb[2]-d.fb[0], bh=d.fb[3]-d.fb[1];
+    if(refine.has(d) && Math.max(bw,bh) < 0.8*Math.max(W,H)){
+      const m=0.18, rx=Math.max(0,Math.floor(d.fb[0]-bw*m)), ry=Math.max(0,Math.floor(d.fb[1]-bh*m));
+      const rw=Math.min(W,Math.ceil(d.fb[2]+bw*m))-rx, rh=Math.min(H,Math.ceil(d.fb[3]+bh*m))-ry;
+      const lb=letterbox(cv.fc, rx, ry, rw, rh);
+      const RR=await infer(lb, nT, 0.05);
+      let best=null, bi=0.3; for(const e of RR.dets){ if(e.k!==d.k) continue; const v=iou(e.fb,d.fb); if(v>bi){ bi=v; best=e; } }
+      if(best){ detMaskTo(cv.px, best, RR.proto, RR.lb, W, H); continue; }
+    }
+    detMaskTo(cv.px, d, R.proto, R.lb, W, H);
+  }
+  for(const d of neg) detMaskTo(cv.nx, d, R.proto, R.lb, W, H);
+  // segurar o último resultado se o alvo sumir por poucos frames
+  if(!pos.length && memo.last && memo.age < P.hold){ memo.age++; return {q:memo.last.slice(), dets:R.dets, held:true}; }
+  const pd=cv.px.getImageData(0,0,W,H).data, nd=neg.length? cv.nx.getImageData(0,0,W,H).data : null;
+  const q=new Float32Array(W*H);
+  for(let i=0,j=0;i<W*H;i++,j+=4){ q[i]=((pd[j]>=128)&&!(nd&&nd[j]>=128))?1:0; } // binário no limiar 0.5; a borda suave vem do refino guiado pela imagem
+  if(P.edge>0 && pos.length){
+    const fd=cv.fx.getImageData(0,0,W,H).data, I=new Float32Array(W*H);
+    for(let i=0,j=0;i<W*H;i++,j+=4) I[i]=(0.299*fd[j]+0.587*fd[j+1]+0.114*fd[j+2])/255;
+    const r=Math.max(1,Math.round(P.edge*Math.max(W,H)/1920));
+    guided(I, q, W, H, r, 2e-4);
+  }
+  memo.last=q; memo.age=0;
+  return {q, dets:R.dets};
+}
+
+/* ---------------- PNG 8-bit cinza (nativo) ---------------- */
+const CRC=(()=>{const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xedb88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t;})();
+function crc32(b){ let c=0xffffffff; for(let i=0;i<b.length;i++) c=CRC[(c^b[i])&255]^(c>>>8); return (c^0xffffffff)>>>0; }
+async function zlib(data){ const cs=new CompressionStream("deflate"); const w=cs.writable.getWriter(); w.write(data); w.close(); return new Uint8Array(await new Response(cs.readable).arrayBuffer()); }
+async function pngGray(px, W, H){
+  const raw=new Uint8Array((W+1)*H); for(let y=0;y<H;y++){ raw[y*(W+1)]=0; raw.set(px.subarray(y*W,(y+1)*W), y*(W+1)+1); }
+  const idat=await zlib(raw);
+  const chunk=(type,data)=>{ const out=new Uint8Array(12+data.length), dv=new DataView(out.buffer); dv.setUint32(0,data.length); for(let i=0;i<4;i++) out[4+i]=type.charCodeAt(i); out.set(data,8); dv.setUint32(8+data.length, crc32(out.subarray(4,8+data.length))); return out; };
+  const ih=new Uint8Array(13), dv=new DataView(ih.buffer); dv.setUint32(0,W); dv.setUint32(4,H); ih[8]=8; ih[9]=0; ih[10]=0; ih[11]=0; ih[12]=0;
+  const parts=[new Uint8Array([137,80,78,71,13,10,26,10]), chunk("IHDR",ih), chunk("IDAT",idat), chunk("IEND",new Uint8Array(0))];
+  return new Blob(parts,{type:"image/png"});
+}
+
+/* ---------------- monitor ---------------- */
+const view=$("#view"), vctx=view.getContext("2d");
+const vid=$("#vid");
+let srcURL=null;
+function fitView(W,H){ view.width=W>H? Math.min(1280,W): Math.round(Math.min(1280,H)*W/H); view.height=Math.round(view.width*H/W); $("#screen").style.aspectRatio=`${W}/${H}`; }
+function frameIndexAt(t){ const v=st.video; if(!v) return 0; const ts=v._pts; let lo=0,hi=ts.length-1; while(lo<hi){ const m=(lo+hi+1)>>1; if(ts[m]<=t+1e-4) lo=m; else hi=m-1; } return lo; }
+function drawCurrent(){
+  const v=st.video; if(!v) return;
+  const W=view.width, H=view.height;
+  vctx.globalCompositeOperation="source-over";
+  if(vid.readyState>=2) vctx.drawImage(vid,0,0,W,H); else { vctx.fillStyle="#000"; vctx.fillRect(0,0,W,H); }
+  const fi = frameIndexAt(vid.currentTime + (v._pts[0]||0));
+  $("#scrub").value=fi; $("#tc").textContent=`frame ${fi} / ${v.nFrames-1}  ·  ${(vid.currentTime||0).toFixed(3)} s`;
+  const R=st.results;
+  if(R && R.thumbs[fi] && st.view!=="orig"){
+    const tw=R.tw, th=R.th, img=new ImageData(tw,th), d=img.data, m=R.thumbs[fi];
+    for(let i=0,j=0;i<m.length;i++,j+=4){ if(st.view==="mask"){ d[j]=d[j+1]=d[j+2]=m[i]; d[j+3]=255; } else { d[j]=255; d[j+1]=60; d[j+2]=60; d[j+3]=m[i]*0.55; } }
+    const tc=new OffscreenCanvas(tw,th); tc.getContext("2d").putImageData(img,0,0);
+    if(st.view==="mask"){ vctx.drawImage(tc,0,0,W,H); } else { vctx.drawImage(tc,0,0,W,H); }
+  } else if(st.test && st.view!=="orig"){
+    const T=st.test; vctx.drawImage(T.overlay,0,0,W,H);
+    const sx=W/T.W, sy=H/T.H; vctx.lineWidth=2; vctx.font="600 13px "+getComputedStyle(document.body).getPropertyValue("--mono");
+    T.dets.forEach((d,i)=>{ const on = st.sel==="all" || T.picked.has(i); const neg=T.terms[d.k].sign<0;
+      vctx.strokeStyle = neg? "#ff4d4d" : on? "#ffb547" : "rgba(255,255,255,.45)";
+      vctx.strokeRect(d.fb[0]*sx, d.fb[1]*sy, (d.fb[2]-d.fb[0])*sx, (d.fb[3]-d.fb[1])*sy);
+      const lab=`#${i+1} ${T.terms[d.k].label} ${d.conf.toFixed(2)}`; vctx.fillStyle="rgba(0,0,0,.65)"; const tw=vctx.measureText(lab).width+8;
+      vctx.fillRect(d.fb[0]*sx, Math.max(0,d.fb[1]*sy-18), tw, 18); vctx.fillStyle=vctx.strokeStyle; vctx.fillText(lab, d.fb[0]*sx+4, Math.max(13,d.fb[1]*sy-5)); });
+  }
+}
+vid.addEventListener("seeked", drawCurrent); vid.addEventListener("loadeddata", drawCurrent);
+let raf=0; function loop(){ drawCurrent(); if(!vid.paused) raf=requestAnimationFrame(loop); }
+vid.addEventListener("play", ()=>{ $("#playBtn").textContent="❚❚"; loop(); });
+vid.addEventListener("pause", ()=>{ $("#playBtn").textContent="▶"; cancelAnimationFrame(raf); drawCurrent(); });
+$("#playBtn").onclick=()=>{ if(!st.video) return; vid.paused? vid.play().catch(()=>{}) : vid.pause(); };
+vid.loop=true;
+$("#scrub").addEventListener("input", e=>{ const v=st.video; if(!v) return; vid.pause(); vid.currentTime = v._pts[+e.target.value]-v._pts[0] + 1e-3; });
+document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{ st.view=b.dataset.v; document.querySelectorAll("[data-v]").forEach(x=>x.setAttribute("aria-pressed", x===b)); drawCurrent(); });
+document.querySelectorAll("[data-sel]").forEach(b=>b.onclick=()=>{ st.sel=b.dataset.sel; document.querySelectorAll("[data-sel]").forEach(x=>x.setAttribute("aria-pressed", x===b)); renderObjs(); drawCurrent(); });
+document.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ st.quality=b.dataset.q; document.querySelectorAll("[data-q]").forEach(x=>x.setAttribute("aria-pressed", x===b)); });
+for(const id of ["conf","edge","grow","feather","smooth","hold"]){ const el=$("#"+id), out=el.nextElementSibling; const fmt=()=>{ out.textContent = id==="conf"? (+el.value).toFixed(2) : id==="grow"? (el.value>0?"+":"")+el.value+" px" : id==="smooth"||id==="hold"? el.value : el.value+" px"; }; el.addEventListener("input",fmt); fmt(); el.addEventListener("dblclick",()=>{ el.value=el.defaultValue; fmt(); }); }
+
+/* ---------------- carregar vídeo ---------------- */
+async function useFile(file){
+  try{
+    setStatus("Lendo o vídeo…"); $("#viewMsg").textContent="Lendo o vídeo…"; $("#viewMsg").hidden=false;
+    const v=await openVideo(file);
+    v._pts = v.samples.map(s=>s.cts/s.timescale).sort((a,b)=>a-b);
+    st.video=v; st.results=null; st.test=null; st.zipBlob=null; $("#saveBtn").disabled=true; $("#checks").textContent="";
+    if(srcURL) URL.revokeObjectURL(srcURL); srcURL=URL.createObjectURL(file); vid.src=srcURL;
+    fitView(v.W,v.H);
+    $("#fileName").textContent=file.name;
+    $("#scrub").max=v.nFrames-1;
+    const meta=[["Resolução",`${v.W}×${v.H}`],["Frames",v.nFrames],["FPS",v.fps.toFixed(3)],["Duração",v.dur.toFixed(2)+" s"],["Codec",v.codec.split(".")[0]],["Rotação",v.rot+"°"]];
+    const box=$("#meta"); box.textContent=""; for(const [k,val] of meta){ const d=document.createElement("div"); const s=document.createElement("span"); s.textContent=k; d.append(s, document.createTextNode(String(val))); box.append(d); }
+    $("#viewMsg").hidden=true; setStatus(`Pronto: ${v.nFrames} frames. Estimativa: ${estimate()}.`);
+    renderObjs();
+  }catch(e){ setStatus(e.message); $("#viewMsg").textContent=e.message; console.error(e); }
+}
+function estimate(){ const v=st.video; if(!v) return "–"; const per = (st.engine==="webgpu"?0.15:1.2) * (st.quality==="high"?2.5:1) * Math.max(1,(v.W*v.H)/(1920*1080)*0.6+0.4); return "~"+fmtTime(per*v.nFrames)+(st.engine?"":" (depende do motor)"); }
+$("#pickBtn").onclick=()=>$("#file").click();
+$("#file").onchange=e=>{ const f=e.target.files[0]; if(f) useFile(f); };
+const scr=$("#screen");
+scr.addEventListener("dragover",e=>{ e.preventDefault(); $("#dropHint").hidden=false; });
+scr.addEventListener("dragleave",()=>{ $("#dropHint").hidden=true; });
+scr.addEventListener("drop",e=>{ e.preventDefault(); $("#dropHint").hidden=true; const f=e.dataTransfer.files[0]; if(f) useFile(f); });
+
+/* ---------------- testar no frame atual ---------------- */
+async function grabCurrentFrame(){
+  // frame exato via WebCodecs (o mesmo que o processamento vai ver)
+  const v=st.video, fi=+$("#scrub").value;
+  const cv=makeCanvases(v.W,v.H);
+  let got=false, n=0;
+  for await (const f of decodeAll(v)){
+    const t=f.timestamp/1e6;
+    if(Math.abs(t - v._pts[fi])<5e-4){ drawFrame(f, cv.fx, v.W, v.H, v.rot); f.close(); got=true; break; }
+    f.close(); if(++n>v.nFrames) break;
+  }
+  if(!got) throw new Error("Não consegui ler esse frame.");
+  return {cv, fi};
+}
+$("#testBtn").onclick=async()=>{
+  if(!st.video) return;
+  const terms=renderTerms();
+  try{
+    await loadEngine();
+    const ts=renderTerms(); if(ts.some(t=>t.idx<0)){ setStatus("Há termos que o modelo não conhece (em vermelho). Escolha uma sugestão."); return; }
+    if(!ts.some(t=>t.sign>0)){ setStatus("Coloque pelo menos um alvo sem “-”."); return; }
+    if(ts.length>NSLOT){ setStatus(`Use no máximo ${NSLOT} termos.`); return; }
+    st._tpe=buildTpe(ts);
+    vid.pause(); setStatus("Lendo o frame e procurando…");
+    const {cv, fi}=await grabCurrentFrame();
+    const P=readParams(); const v=st.video;
+    const memo={};
+    const t0=performance.now();
+    const res=await maskForFrame(cv, v.W, v.H, ts, P, null, memo);
+    const ms=performance.now()-t0;
+    const m=finish(res.q, v.W, v.H, {...P, invert:false});
+    // overlay
+    const ov=new OffscreenCanvas(v.W,v.H), ox=ov.getContext("2d"), id=ox.createImageData(v.W,v.H);
+    for(let i=0,j=0;i<m.length;i++,j+=4){ id.data[j]=255; id.data[j+1]=60; id.data[j+2]=60; id.data[j+3]=m[i]*0.55; }
+    ox.putImageData(id,0,0);
+    const dets=res.dets.filter(d=>d.conf>=P.conf);
+    st.test={frameIdx:fi, dets, picked:new Set(dets.map((d,i)=>ts[d.k].sign>0?i:-1).filter(i=>i>=0)), terms:ts, W:v.W, H:v.H, overlay:ov, mask:m};
+    st.results=null;
+    renderObjs(); drawCurrent();
+    setStatus(`${dets.length} objeto(s) no frame ${fi} · ${ms.toFixed(0)} ms neste frame · estimativa total ${estimate()}`);
+  }catch(e){ setStatus(e.message); console.error(e); }
+};
+function renderObjs(){
+  const box=$("#objs"); const T=st.test;
+  if(!T){ return; }
+  box.textContent="";
+  if(!T.dets.length){ const p=document.createElement("p"); p.className="hint"; p.textContent="Nada encontrado neste frame. Baixe a confiança ou troque o termo."; box.append(p); return; }
+  T.dets.forEach((d,i)=>{
+    const row=document.createElement("label"); row.className="obj";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked = st.sel==="all" || T.picked.has(i); cb.disabled = st.sel==="all" || T.terms[d.k].sign<0;
+    cb.onchange=()=>{ cb.checked? T.picked.add(i) : T.picked.delete(i); drawCurrent(); };
+    const n=document.createElement("span"); n.className="n"; n.textContent="#"+(i+1);
+    const l=document.createElement("span"); l.textContent=(T.terms[d.k].sign<0?"− ":"")+T.terms[d.k].label;
+    const c=document.createElement("span"); c.className="c"; c.textContent=d.conf.toFixed(2);
+    row.append(cb,n,l,c); box.append(row);
+  });
+}
+view.addEventListener("click", e=>{
+  const T=st.test; if(!T || st.sel!=="pick") return;
+  const r=view.getBoundingClientRect(), x=(e.clientX-r.left)/r.width*T.W, y=(e.clientY-r.top)/r.height*T.H;
+  let hit=-1, area=Infinity;
+  T.dets.forEach((d,i)=>{ if(T.terms[d.k].sign<0) return; if(x>=d.fb[0]&&x<=d.fb[2]&&y>=d.fb[1]&&y<=d.fb[3]){ const a=(d.fb[2]-d.fb[0])*(d.fb[3]-d.fb[1]); if(a<area){ area=a; hit=i; } } });
+  if(hit>=0){ T.picked.has(hit)? T.picked.delete(hit) : T.picked.add(hit); renderObjs(); drawCurrent(); }
+});
+
+/* ---------------- gerar ---------------- */
+$("#stopBtn").onclick=()=>{ st.stop=true; setStatus("Parando…"); };
+$("#runBtn").onclick=async()=>{
+  if(!st.video || st.running) return;
+  const v=st.video, P=readParams();
+  try{
+    await loadEngine();
+    const terms=renderTerms();
+    if(terms.some(t=>t.idx<0)){ setStatus("Há termos que o modelo não conhece (em vermelho). Escolha uma sugestão."); return; }
+    if(!terms.some(t=>t.sign>0)){ setStatus("Coloque pelo menos um alvo sem “-”."); return; }
+    if(terms.length>NSLOT){ setStatus(`Use no máximo ${NSLOT} termos.`); return; }
+    st._tpe=buildTpe(terms);
+    let chosenSeed=null;
+    if(st.sel==="pick"){
+      const T=st.test;
+      if(!T || !T.picked.size){ setStatus("No modo “Só os marcados”, teste um frame e clique nos objetos que quer."); return; }
+      chosenSeed={frame:T.frameIdx, boxes:[...T.picked].map(i=>({b:T.dets[i].fb.slice(), k:T.dets[i].k}))};
+    }
+    st.running=true; st.stop=false; $("#runBtn").disabled=true; $("#stopBtn").disabled=false; $("#saveBtn").disabled=true; $("#checks").textContent="";
+    vid.pause();
+    const W=v.W, H=v.H, cv=makeCanvases(W,H);
+    // objetos marcados: 1ª passada leve para achar a posição deles no frame 0 (segue para trás a partir do frame marcado)
+    let chosen=null;
+    if(chosenSeed){
+      chosen = await backtrack(chosenSeed, terms, P);
+      if(st.stop) throw new Error("Parado.");
+    }
+    // saídas
+    const zip=new JSZip(), name=base(v.name);
+    const pngDir = P && $("#outPng").checked ? zip.folder(`${name}_mascara_png`) : null;
+    let muxer=null, enc=null, chunks=0, encErr=null;
+    const mc=new OffscreenCanvas(W,H), mx=mc.getContext("2d"), mimg=mx.createImageData(W,H);
+    if($("#outMp4").checked){
+      const br = Math.min(40e6, Math.max(6e6, W*H*v.fps*0.12));
+      const tryCodecs=["avc1.640034","avc1.640033","avc1.640028","avc1.4d0028"];
+      let cfg=null; for(const c of tryCodecs){ const t={codec:c, width:W, height:H, bitrate:br, framerate:v.fps, avc:{format:"avc"}, latencyMode:"quality"}; const s=await VideoEncoder.isConfigSupported(t).catch(()=>({supported:false})); if(s.supported){ cfg=t; break; } }
+      if(!cfg) throw new Error(`O navegador não codifica H.264 em ${W}×${H}. Desmarque o MP4 e use a sequência PNG.`);
+      muxer=new Mp4Muxer.Muxer({target:new Mp4Muxer.ArrayBufferTarget(), video:{codec:"avc", width:W, height:H, frameRate:Math.round(v.fps)}, fastStart:"in-memory", firstTimestampBehavior:"offset"});
+      enc=new VideoEncoder({output:(c,m)=>{ muxer.addVideoChunk(c,m); chunks++; }, error:e=>{ encErr=e; }});
+      enc.configure(cfg);
+    }
+    const tw=Math.min(480,W), th=Math.round(tw*H/W);
+    st.results={thumbs:new Array(v.nFrames), tw, th};
+    const thumbC=new OffscreenCanvas(tw,th), thumbX=thumbC.getContext("2d",{willReadFrequently:true});
+    const outTs=[], memo={}, buf=new Map(); let emitted=0, nextEmit=0; const t0=performance.now(); const coverage=[];
+    const emit = async (item)=>{
+      const m=finish(item.q, W, H, P);
+      for(let i=0,j=0;i<m.length;i++,j+=4){ mimg.data[j]=mimg.data[j+1]=mimg.data[j+2]=m[i]; mimg.data[j+3]=255; }
+      mx.putImageData(mimg,0,0);
+      if(enc){ while(enc.encodeQueueSize>4) await sleep(5); if(encErr) throw encErr;
+        const vf=new VideoFrame(mc,{timestamp:item.ts, duration:item.dur}); enc.encode(vf,{keyFrame: emitted % Math.max(1,Math.round(v.fps)) === 0}); vf.close(); }
+      if(pngDir) pngDir.file(`${name}_mascara_${String(emitted).padStart(5,"0")}.png`, await pngGray(m,W,H));
+      thumbX.drawImage(mc,0,0,tw,th); const td=thumbX.getImageData(0,0,tw,th).data, tm=new Uint8Array(tw*th); for(let i=0,j=0;i<tm.length;i++,j+=4) tm[i]=td[j];
+      st.results.thumbs[emitted]=tm; let s=0; for(let i=0;i<m.length;i+=97) s+=m[i]; coverage.push(+(s/ (m.length/97) /255).toFixed(4));
+      outTs.push(item.ts); emitted++; nextEmit++;
+    };
+    const srcTs=v.samples.map(s=>Math.round(1e6*s.cts/s.timescale)).sort((a,b)=>a-b);
+    const durAt=i=> i+1<srcTs.length? srcTs[i+1]-srcTs[i] : Math.round(1e6/v.fps);
+    let fi=0, expIdx=0, filled=0, lastQ=null, decoded=0;
+    const addItem=async(it)=>{ buf.set(fi,it); fi++;
+      while(nextEmit <= fi-1 - P.smooth){ await emit(avgWindow(buf, nextEmit, P.smooth)); for(const k of [...buf.keys()]) if(k < nextEmit - P.smooth) buf.delete(k); } };
+    for await (const f of decodeAll(v)){
+      if(st.stop){ f.close(); break; }
+      drawFrame(f, cv.fx, W, H, v.rot); const ts=f.timestamp; f.close(); decoded++;
+      const ch = chosen ? chosen.map(c=>({...c, b:(c.byFrame&&c.byFrame[Math.min(expIdx,c.byFrame.length-1)])||c.b})) : null;
+      const res = await maskForFrame(cv, W, H, terms, P, ch, memo);
+      // frame que o decodificador não entregou: repete a máscara vizinha no tempo exato dele (mantém a contagem)
+      while(expIdx < srcTs.length && srcTs[expIdx] < ts-1){ await addItem({q:lastQ||res.q, ts:srcTs[expIdx], dur:durAt(expIdx)}); filled++; expIdx++; }
+      await addItem({q:res.q, ts, dur:durAt(expIdx)}); if(expIdx<srcTs.length && Math.abs(srcTs[expIdx]-ts)<=1) expIdx++;
+      lastQ=res.q;
+      const el=(performance.now()-t0)/1000, per=el/decoded;
+      setBar(expIdx/v.nFrames); setStatus(`Frame ${expIdx}/${v.nFrames} · ${per.toFixed(2)} s/frame · faltam ~${fmtTime(per*(v.nFrames-expIdx))}`);
+      if(decoded%3===0){ vid.currentTime=Math.max(0,v._pts[Math.max(0,emitted-1)]-v._pts[0]+1e-3); }
+    }
+    if(!st.stop) while(expIdx < srcTs.length && lastQ){ await addItem({q:lastQ, ts:srcTs[expIdx], dur:durAt(expIdx)}); filled++; expIdx++; }
+    while(buf.has(nextEmit)) await emit(avgWindow(buf, nextEmit, P.smooth));
+    if(enc){ await enc.flush(); enc.close(); if(encErr) throw encErr; muxer.finalize(); zip.file(`${name}_mascara.mp4`, muxer.target.buffer); }
+    const same = outTs.length===srcTs.length && outTs.every((t,i)=>Math.abs(t-srcTs[i])<=1);
+    const report={video:v.name, largura:W, altura:H, frames_original:v.nFrames, frames_mascara:emitted, fps:+v.fps.toFixed(4),
+      tempos_identicos:same, frames_repetidos_por_falha_do_decodificador:filled, chunks_mp4:enc?chunks:null, prompt:$("#prompt").value, termos:terms.map(t=>({rotulo:t.label, modelo:t.en, subtrai:t.sign<0})),
+      objetos: st.sel==="pick"? "marcados" : "todos", parametros:P, motor:st.engine, cobertura_por_frame:coverage, tempo_s:+((performance.now()-t0)/1000).toFixed(1)};
+    zip.file(`${name}_relatorio.json`, JSON.stringify(report,null,1));
+    setStatus("Montando o ZIP…");
+    st.zipBlob=await zip.generateAsync({type:"blob", compression:"STORE"}); st.zipName=`${name}_mascaras.zip`;
+    const ok = emitted===v.nFrames && same && (!enc || chunks===emitted);
+    const ck=$("#checks"); ck.textContent="";
+    for(const [y,t] of [[emitted===v.nFrames, `${emitted} de ${v.nFrames} frames`],[same,"mesmos tempos de frame do original"],[true,`mesma resolução ${W}×${H}`],[!enc||chunks===emitted, enc?`MP4 com ${chunks} frames`:"MP4 desligado"]].concat(filled?[[true,`${filled} frame(s) que o navegador não decodificou receberam a máscara do vizinho`]]:[])){ const d=document.createElement("div"); d.className=y?"y":"n"; d.textContent=t; ck.append(d); }
+    setBar(1); setStatus(st.stop? `Parado no frame ${emitted}. O ZIP tem só o que foi feito.` : `Pronto em ${fmtTime(report.tempo_s)}. ${ok?"Tudo bate com o original.":"Confira os itens em vermelho."}`);
+    $("#saveBtn").disabled=false; st.test=null; vid.currentTime=0; drawCurrent();
+  }catch(e){ setStatus(e.message); console.error(e); }
+  finally{ st.running=false; $("#runBtn").disabled=false; $("#stopBtn").disabled=true; }
+};
+function avgWindow(buf, c, N){
+  if(N===0) return buf.get(c);
+  const ks=[]; for(let k=c-N;k<=c+N;k++) if(buf.has(k)) ks.push(k);
+  const L=buf.get(c).q.length, q=new Float32Array(L);
+  for(const k of ks){ const s=buf.get(k).q; for(let i=0;i<L;i++) q[i]+=s[i]; }
+  for(let i=0;i<L;i++) q[i]/=ks.length; return {q, ts:buf.get(c).ts, dur:buf.get(c).dur};
+}
+async function backtrack(seed, terms, P){
+  // passada só de detecção (rápida) para saber onde cada objeto marcado está em todos os frames
+  const v=st.video, W=v.W, H=v.H, cv=makeCanvases(W,H), nT=Math.min(terms.length,NSLOT);
+  const all=[]; let fi=0;
+  for await (const f of decodeAll(v)){
+    if(st.stop){ f.close(); break; }
+    drawFrame(f, cv.fx, W, H, v.rot); f.close();
+    const R=await infer(letterbox(cv.fc,0,0,W,H), nT, 0.1);
+    all.push(R.dets.map(d=>({fb:d.fb,k:d.k,conf:d.conf})));
+    fi++; setBar(fi/v.nFrames*0.999); setStatus(`Localizando os objetos marcados… ${fi}/${v.nFrames}`);
+  }
+  return seed.boxes.map(s=>{
+    const byFrame=new Array(all.length);
+    byFrame[seed.frame]=s.b;
+    for(const dir of [1,-1]){ let b=s.b, miss=0;
+      for(let i=seed.frame+dir; i>=0 && i<all.length; i+=dir){
+        let best=null, bi=0.25; for(const d of all[i]){ if(d.k!==s.k) continue; const x=iou(d.fb,b); if(x>bi){ bi=x; best=d; } }
+        if(best){ b=best.fb; miss=0; } else miss++;
+        byFrame[i]=b;
+      } }
+    return {k:s.k, b:byFrame[0], byFrame};
+  });
+}
+$("#saveBtn").onclick=async()=>{
+  if(!st.zipBlob) return;
+  if(window.DLM_STANDALONE){
+    const a=document.createElement("a"); a.href=URL.createObjectURL(st.zipBlob); a.download=st.zipName; document.body.append(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 60000); setStatus("ZIP baixado."); return;
+  }
+  const dl = window.claude ? await claude.use("downloads") : null;
+  if(!dl){ setStatus("Download indisponível nesta visualização. Abra o artefato no claude.ai."); return; }
+  try{ await dl.save({filename: st.zipName, data: st.zipBlob}); setStatus("ZIP enviado para download."); }
+  catch(e){ setStatus(e.code==="declined"? "Download cancelado." : e.code==="rate_limited"? "Aguarde um instante e tente de novo." : "Não foi possível baixar: "+(e.message||e.code)); }
+};
+
+/* ---------------- início: exemplo carregado ---------------- */
+(async()=>{
+  if(!("VideoDecoder" in window)){ setStatus("Este navegador não tem WebCodecs. Use Chrome, Edge ou Safari 17+."); $("#viewMsg").textContent="Navegador sem WebCodecs"; return; }
+  loadVocab().catch(()=>{});
+  try{ const r=await fetch("exemplo.mp4"); const b=await r.blob(); await useFile(new File([b],"exemplo.mp4",{type:"video/mp4"})); $("#fileName").textContent="exemplo.mp4 (exemplo)"; }
+  catch(e){ $("#viewMsg").textContent="Escolha um vídeo para começar."; }
+})();
+</script>
