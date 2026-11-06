@@ -79,6 +79,7 @@ input[type=text]{flex:1;min-width:0;font:inherit;font-size:15px;color:var(--fg);
 .ctl{display:grid;grid-template-columns:130px minmax(0,1fr) 54px;gap:8px;align-items:center;font-size:13px}
 .ctl output{font-family:var(--mono);font-size:12px;text-align:right;color:var(--mute)}
 .ctl input[type=range]{width:100%}
+.ctl select{font:inherit;color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
 label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
 .bar{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
 .bar i{display:block;height:100%;width:0;background:var(--tally);transition:width .2s}
@@ -88,18 +89,34 @@ label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
 .checks .y::before{color:var(--ok)} .checks .n::before{color:var(--bad)}
 .foot{color:var(--mute);font-size:12px;margin-top:16px;max-width:75ch}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tools button{padding:6px 10px}
+.tools button[aria-pressed=true]{background:var(--tally);color:var(--tally-ink);border-color:var(--tally)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:-1px;border:1.5px solid #fff}
+.dot.g{background:#33d17a}.dot.r{background:#ff3b3b}
+.tag{font-family:var(--sans);text-transform:none;letter-spacing:0;font-weight:500;color:var(--mute);font-size:11.5px;border:1px solid var(--line);border-radius:4px;padding:1px 6px}
+#view{touch-action:none;cursor:pointer}
 </style>
 </head>
 <body>
 <header>
   <div class="brand"><i aria-hidden="true"></i>DeLeon Mask</div>
-  <div class="sub">Máscara preto e branco por prompt, frame a frame</div>
+  <div class="sub">Máscara preto e branco por prompt e pins, frame a frame</div>
   <div class="spacer"></div>
   <span class="chip" id="engineChip">motor: não carregado</span>
 </header>
 
 <main>
   <div class="monitor">
+    <div class="tools" role="group" aria-label="Ferramentas do monitor">
+      <button data-tool="select" aria-pressed="true" title="Clique num objeto para ligar ou desligar">Selecionar</button>
+      <button data-tool="plus" aria-pressed="false" title="Clique no que deve entrar na máscara"><i class="dot g"></i>Pin +</button>
+      <button data-tool="minus" aria-pressed="false" title="Clique no que deve sair da máscara (ou Shift + clique)"><i class="dot r"></i>Pin −</button>
+      <button data-tool="box" aria-pressed="false" title="Arraste uma caixa em volta de um objeto novo">Caixa</button>
+      <span class="spacer"></span>
+      <button id="undoPin" title="Desfaz o último pin ou caixa">Desfazer</button>
+      <button id="clearPins">Limpar pins</button>
+    </div>
     <div class="screen" id="screen">
       <canvas id="view" width="640" height="360" aria-label="Monitor"></canvas>
       <div class="msg" id="viewMsg">Carregando exemplo…</div>
@@ -115,6 +132,7 @@ label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
         <button data-v="mask" aria-pressed="false">Máscara</button>
       </div>
     </div>
+    <p class="hint" id="toolHint">Analise um frame. Depois use os pins para corrigir: <b>Pin +</b> no que faltou, <b>Pin −</b> no que sobrou, <b>Caixa</b> para um objeto que o texto não achou.</p>
     <video id="vid" playsinline muted hidden></video>
   </div>
 
@@ -133,46 +151,48 @@ label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
     <section class="p" aria-labelledby="h2">
       <h2 id="h2"><b>02</b> O que vira máscara</h2>
       <div class="row">
-        <input type="text" id="prompt" value="pessoa" aria-label="Prompt" placeholder="ex.: pessoa, -microfone">
-        <button id="testBtn">Testar neste frame</button>
+        <input type="text" id="prompt" value="pessoa" aria-label="Prompt" placeholder="ex.: pessoa, -microfone (ou deixe vazio e use pins)">
+        <button id="testBtn">Analisar este frame</button>
       </div>
-      <p class="hint">Separe por vírgula. Use <b>-</b> para tirar: <code>pessoa, -microfone</code>. Português ou inglês.</p>
+      <p class="hint">Separe por vírgula. Use <b>-</b> para tirar: <code>pessoa, -microfone</code>. Pode deixar vazio e marcar só com pins e caixas.</p>
       <div class="terms" id="terms"></div>
       <div class="row">
-        <span class="hint">Objetos:</span>
-        <div class="seg" role="group" aria-label="Quais objetos">
-          <button data-sel="all" aria-pressed="true">Todos</button>
-          <button data-sel="pick" aria-pressed="false">Só os marcados</button>
+        <span class="hint">Objetos que entram em cena depois:</span>
+        <div class="seg" role="group" aria-label="Novos objetos">
+          <button data-sel="all" aria-pressed="true">Incluir</button>
+          <button data-sel="pick" aria-pressed="false">Só os deste frame</button>
         </div>
       </div>
-      <div class="objs" id="objs"><p class="hint">Clique em “Testar neste frame” para ver o que o modelo encontra. Depois clique nos objetos no monitor para marcar.</p></div>
+      <div class="objs" id="objs"><p class="hint">Escolha o frame no monitor e clique em “Analisar este frame”. O ideal é um frame onde o objeto aparece inteiro.</p></div>
     </section>
 
     <section class="p" aria-labelledby="h3">
-      <h2 id="h3"><b>03</b> Qualidade e acabamento</h2>
-      <div class="row">
-        <span class="hint">Qualidade:</span>
-        <div class="seg" role="group" aria-label="Qualidade">
-          <button data-q="fast" aria-pressed="false">Rápida</button>
-          <button data-q="high" aria-pressed="true">Alta (recorte)</button>
-        </div>
-      </div>
-      <div class="ctl"><label for="conf">Confiança</label><input type="range" id="conf" min="0.05" max="0.9" step="0.01" value="0.30"><output for="conf"></output></div>
-      <div class="ctl"><label for="edge">Refinar borda</label><input type="range" id="edge" min="0" max="12" step="1" value="4"><output for="edge"></output></div>
+      <h2 id="h3"><b>03</b> Rastreamento</h2>
+      <div class="ctl"><label for="cutter">Recortador</label><select id="cutter"><option value="sam2" selected>SAM 2.1 · precisão</option><option value="mobile">MobileSAM · rápido</option></select><output></output></div>
+      <div class="ctl"><label for="conf">Confiança do texto</label><input type="range" id="conf" min="0.05" max="0.9" step="0.01" value="0.30"><output for="conf"></output></div>
+      <div class="ctl"><label for="edge">Colar na imagem</label><input type="range" id="edge" min="0" max="8" step="1" value="0"><output for="edge"></output></div>
+      <div class="ctl"><label for="hold">Seguir sem detecção</label><input type="range" id="hold" min="0" max="60" step="1" value="24"><output for="hold"></output></div>
+      <label class="ck"><input type="checkbox" id="islands" checked> Remover ilhas soltas</label>
+      <label class="ck"><input type="checkbox" id="holes" checked> Preencher furos pequenos</label>
+      <p class="hint">Cada objeto é seguido usando a máscara do frame anterior como guia. Isso é o que tira o tremido.</p>
+    </section>
+
+    <section class="p" aria-labelledby="h4">
+      <h2 id="h4"><b>04</b> Acabamento <span class="tag">sem refazer o rastreamento</span></h2>
       <div class="ctl"><label for="grow">Expandir / contrair</label><input type="range" id="grow" min="-20" max="20" step="1" value="0"><output for="grow"></output></div>
       <div class="ctl"><label for="feather">Suavizar borda</label><input type="range" id="feather" min="0" max="20" step="0.5" value="0"><output for="feather"></output></div>
-      <div class="ctl"><label for="smooth">Estabilizar (±frames)</label><input type="range" id="smooth" min="0" max="3" step="1" value="0"><output for="smooth"></output></div>
-      <div class="ctl"><label for="hold">Segurar se sumir</label><input type="range" id="hold" min="0" max="15" step="1" value="4"><output for="hold"></output></div>
+      <div class="ctl"><label for="smooth">Estabilizar (±frames)</label><input type="range" id="smooth" min="0" max="3" step="1" value="1"><output for="smooth"></output></div>
       <label class="ck"><input type="checkbox" id="hard"> Borda dura (só preto e branco puros)</label>
       <label class="ck"><input type="checkbox" id="invert"> Inverter (alvo preto, fundo branco)</label>
     </section>
 
-    <section class="p" aria-labelledby="h4">
-      <h2 id="h4"><b>04</b> Gerar e exportar</h2>
+    <section class="p" aria-labelledby="h5">
+      <h2 id="h5"><b>05</b> Gerar e exportar</h2>
       <label class="ck"><input type="checkbox" id="outMp4" checked> Vídeo da máscara (MP4 H.264, mesmos tempos de frame)</label>
       <label class="ck"><input type="checkbox" id="outPng" checked> Sequência PNG 8-bit (1 por frame, numerada do 00000)</label>
       <div class="row">
         <button class="primary" id="runBtn">Gerar máscaras</button>
+        <button id="finishBtn" disabled title="Refaz só o acabamento, sem rastrear de novo">Aplicar acabamento</button>
         <button id="stopBtn" disabled>Parar</button>
         <button id="saveBtn" disabled>Baixar ZIP</button>
       </div>
@@ -182,7 +202,7 @@ label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
     </section>
   </div>
 </main>
-<p class="foot">Tudo roda no seu computador (placa de vídeo pelo WebGPU, ou processador se não houver). O vídeo não sai da sua máquina. Na primeira vez o motor baixa cerca de 70 MB. ProRes e recorte com canal alfa: peça no chat, pelo pipeline na nuvem.</p>
+<p class="foot">Tudo roda no seu computador (placa de vídeo pelo WebGPU, ou processador se não houver). O vídeo não sai da sua máquina. Na primeira vez o motor baixa de 120 a 180 MB (fica guardado no navegador). ProRes e recorte com canal alfa: peça no chat, pelo pipeline na nuvem.</p>
 
 <script src="vendor/ort.webgpu.min.js"></script>
 <script src="vendor/mp4box.all.min.js"></script>
@@ -192,26 +212,29 @@ label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
 "use strict";
 const PT_EN = {"pessoa": "person", "pessoas": "person", "gente": "person", "homem": "person", "mulher": "person", "criança": "person", "crianca": "person", "bebê": "person", "bebe": "person", "menino": "person", "menina": "person", "rosto": "face", "cara": "face", "cabeça": "head", "cabeca": "head", "cabelo": "hair", "olho": "eye", "olhos": "eye", "boca": "mouth", "mão": "hand", "mao": "hand", "mãos": "hand", "maos": "hand", "braço": "arm", "braco": "arm", "perna": "leg", "pé": "foot", "pe": "foot", "corpo": "person", "roupa": "clothing", "camisa": "shirt", "camiseta": "t-shirt", "calça": "pants", "calca": "pants", "bermuda": "shorts", "short": "shorts", "vestido": "dress", "jaqueta": "jacket", "casaco": "coat", "sapato": "shoe", "tênis": "sneaker", "tenis": "sneaker", "chinelo": "sandal", "chapéu": "hat", "chapeu": "hat", "boné": "cap", "bone": "cap", "óculos": "glasses", "oculos": "glasses", "bolsa": "bag", "mochila": "backpack", "relógio": "watch", "relogio": "watch", "carro": "car", "carros": "car", "moto": "motorcycle", "motocicleta": "motorcycle", "bicicleta": "bicycle", "bike": "bicycle", "ônibus": "bus", "onibus": "bus", "caminhão": "truck", "caminhao": "truck", "avião": "airplane", "aviao": "airplane", "barco": "boat", "trem": "train", "roda": "wheel", "pneu": "tire", "cachorro": "dog", "cão": "dog", "cao": "dog", "gato": "cat", "cavalo": "horse", "pássaro": "bird", "passaro": "bird", "ave": "bird", "peixe": "fish", "vaca": "cow", "árvore": "tree", "arvore": "tree", "árvores": "tree", "planta": "plant", "flor": "flower", "flores": "flower", "grama": "grass", "folha": "leaf", "céu": "sky", "ceu": "sky", "nuvem": "cloud", "nuvens": "cloud", "mar": "sea", "água": "water", "agua": "water", "praia": "beach", "areia": "sand", "montanha": "mountain", "chão": "floor", "chao": "floor", "parede": "wall", "teto": "ceiling", "prédio": "building", "predio": "building", "casa": "house", "janela": "window", "porta": "door", "rua": "road", "estrada": "road", "calçada": "sidewalk", "placa": "sign", "letreiro": "sign", "logo": "logo", "logotipo": "logo", "texto": "text", "tela": "screen", "monitor": "monitor", "televisão": "television", "televisao": "television", "tv": "television", "celular": "cell phone", "telefone": "phone", "notebook": "laptop", "computador": "computer", "teclado": "keyboard", "câmera": "camera", "camera": "camera", "microfone": "microphone", "caixa de som": "speaker", "alto-falante": "speaker", "fone": "headphones", "violão": "guitar", "violao": "guitar", "guitarra": "electric guitar", "cadeira": "chair", "mesa": "table", "sofá": "sofa", "sofa": "sofa", "cama": "bed", "garrafa": "bottle", "copo": "cup", "xícara": "mug", "xicara": "mug", "prato": "plate", "comida": "food", "bola": "ball", "luminária": "lamp", "luminaria": "lamp", "lâmpada": "light bulb", "lampada": "light bulb", "cortina": "curtain", "vaso": "vase", "tripé": "tripod", "tripe": "tripod", "bandeira": "flag", "guarda-chuva": "umbrella", "guarda-sol": "umbrella", "fogo": "fire", "fumaça": "smoke", "fumaca": "smoke", "produto": "product", "caixa": "box", "lata": "can", "cartão": "card", "cartao": "card", "dinheiro": "money", "moeda": "coin", "ímã": "magnet", "ima": "magnet"};
 const $ = s => document.querySelector(s);
-const S = 640, NSLOT = 8, NA = 8400, PROTO = 160;
+const S = 640, NSLOT = 8, NA = 8400, PROTO = 160;   // YOLOE (texto → caixas)
+const SAMS = 1024, NP = 8;                          // SAM (caixas/pins → contorno)
+const SAM_MEAN = [123.675,116.28,103.53], SAM_STD = [58.395,57.12,57.375];
 const st = {
-  vocab:null, vocabIdx:null, pe:null, session:null, engine:null,
-  video:null,      // {name, buf, samples, cfg, W, H, rot, timescale, nFrames, fps, codec}
-  previewFrames:[],// ImageBitmap thumbnails of source (optional)
-  results:null,    // {thumbs:[Uint8Array], tw, th, ts:[]}
-  view:"over", sel:"all", quality:"high",
-  test:null,       // {frameIdx, dets, picked:Set, W,H}
-  zipBlob:null, running:false, stop:false,
+  vocab:null, vocabIdx:null, pe:null, yolo:null, enc:null, dec:null, engine:null,
+  video:null, view:"over", sel:"all", tool:"select",
+  ref:null,        // frame de referência: {fi, cv, W, H, objs, terms, history}
+  raw:null,        // resultado do rastreamento: {png:[Blob], thumbs:[Uint8Array], tw, th}
+  results:null,    // miniaturas exibidas
+  zipBlob:null, running:false, stop:false, nextId:1,
 };
 
-/* ---------------- util ---------------- */
-const norm = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+/* ================= util ================= */
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim();
 function setStatus(t){ $("#status").textContent = t; }
 function setBar(f){ $("#bar").style.width = (Math.max(0,Math.min(1,f))*100).toFixed(1)+"%"; }
-function fmtTime(s){ if(!isFinite(s)) return "–"; const m=Math.floor(s/60), r=Math.round(s%60); return m? `${m} min ${r}s` : `${r}s`; }
+function fmtTime(s){ if(!isFinite(s)) return "–"; s=Math.round(s); const m=Math.floor(s/60), r=s%60; return m? `${m} min ${r}s` : `${r}s`; }
 function base(name){ return (name||"video").replace(/\.[^.]+$/,"").replace(/[^\w\-]+/g,"_"); }
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+function iou(a,b){ const x1=Math.max(a[0],b[0]),y1=Math.max(a[1],b[1]),x2=Math.min(a[2],b[2]),y2=Math.min(a[3],b[3]); const i=Math.max(0,x2-x1)*Math.max(0,y2-y1); const u=(a[2]-a[0])*(a[3]-a[1])+(b[2]-b[0])*(b[3]-b[1])-i; return u>0?i/u:0; }
 
-/* ---------------- vocabulário + prompt ---------------- */
+/* ================= vocabulário + prompt ================= */
 const PT_N = {}; for (const [k,v] of Object.entries(PT_EN)) PT_N[norm(k)] = v;
 function lev(a,b){ const m=a.length,n=b.length; if(Math.abs(m-n)>3) return 9; const d=Array.from({length:n+1},(_,j)=>j);
   for(let i=1;i<=m;i++){ let p=d[0]; d[0]=i; for(let j=1;j<=n;j++){ const t=d[j]; d[j]=Math.min(d[j]+1,d[j-1]+1,p+(a[i-1]===b[j-1]?0:1)); p=t; } } return d[n]; }
@@ -222,137 +245,118 @@ function resolveTerm(raw){
   let en = PT_N[n] ?? n;
   if(!st.vocabIdx) return {label, sign, en, idx:-1, sugg:[]};
   let idx = st.vocabIdx.get(en);
-  if(idx===undefined && PT_N[n]===undefined){ // tenta palavra a palavra
-    const w = n.split(/\s+/).map(x=>PT_N[x]??x).join(" "); if(st.vocabIdx.has(w)){ en=w; idx=st.vocabIdx.get(w); }
-  }
+  if(idx===undefined && PT_N[n]===undefined){ const w=n.split(/\s+/).map(x=>PT_N[x]??x).join(" "); if(st.vocabIdx.has(w)){ en=w; idx=st.vocabIdx.get(w); } }
   if(idx===undefined && en.endsWith("s") && st.vocabIdx.has(en.slice(0,-1))){ en=en.slice(0,-1); idx=st.vocabIdx.get(en); }
   let sugg=[];
-  if(idx===undefined){
-    const cand=[];
-    for(const v of st.vocab){ let sc = v.startsWith(en)?0.5 : v.includes(en)?1 : lev(en,v); if(sc<=2) cand.push([sc,v.length,v]); }
-    cand.sort((a,b)=>a[0]-b[0]||a[1]-b[1]); sugg = cand.slice(0,6).map(c=>c[2]);
-  }
+  if(idx===undefined){ const cand=[]; for(const v of st.vocab){ const sc=v.startsWith(en)?0.5:v.includes(en)?1:lev(en,v); if(sc<=2) cand.push([sc,v.length,v]); }
+    cand.sort((a,b)=>a[0]-b[0]||a[1]-b[1]); sugg=cand.slice(0,6).map(c=>c[2]); }
   return {label, sign, en, idx: idx===undefined?-1:idx, sugg};
 }
-function parsePrompt(){
-  const parts = $("#prompt").value.split(/[,;]/).map(s=>s.trim()).filter(Boolean);
-  return parts.map(resolveTerm);
-}
+function parsePrompt(){ return $("#prompt").value.split(/[,;]/).map(s=>s.trim()).filter(Boolean).map(resolveTerm); }
 function renderTerms(){
-  const ts = parsePrompt(); const box=$("#terms"); box.textContent="";
+  const ts=parsePrompt(), box=$("#terms"); box.textContent="";
   for(const t of ts){
-    const el=document.createElement("span");
-    el.className="term "+(t.idx<0?"miss":t.sign<0?"neg":"ok");
+    const el=document.createElement("span"); el.className="term "+(t.idx<0?"miss":t.sign<0?"neg":"ok");
     const a=document.createElement("span"); a.textContent=(t.sign<0?"− ":"+ ")+t.label; el.append(a);
-    const c=document.createElement("code"); c.textContent = t.idx<0 ? (st.vocab? "não conheço" : "…") : (norm(t.label)!==t.en? "→ "+t.en : "ok"); el.append(c);
-    if(t.idx<0 && t.sugg.length){
-      const sg=document.createElement("span"); sg.className="sugg";
+    const c=document.createElement("code"); c.textContent = t.idx<0 ? (st.vocab?"não conheço":"…") : (norm(t.label)!==t.en? "→ "+t.en : "ok"); el.append(c);
+    if(t.idx<0 && t.sugg.length){ const sg=document.createElement("span"); sg.className="sugg";
       for(const s of t.sugg){ const b=document.createElement("button"); b.type="button"; b.textContent=s; b.onclick=()=>{
         const parts=$("#prompt").value.split(/[,;]/); const i=parts.findIndex(p=>p.trim()&&resolveTerm(p).label===t.label);
-        if(i>=0){ parts[i]=(t.sign<0?" -":" ")+s; $("#prompt").value=parts.map(x=>x.trim()).join(", "); renderTerms(); } };
-        sg.append(b);} el.append(sg);
-    }
+        if(i>=0){ parts[i]=(t.sign<0?" -":" ")+s; $("#prompt").value=parts.map(x=>x.trim()).join(", "); renderTerms(); } }; sg.append(b); }
+      el.append(sg); }
     box.append(el);
   }
   return ts;
 }
-$("#prompt").addEventListener("input", ()=>{ renderTerms(); st.test=null; drawCurrent(); });
+$("#prompt").addEventListener("input", ()=>renderTerms());
 
-/* ---------------- arquivos do motor ---------------- */
+/* ================= motor (download + sessões) ================= */
 async function fetchParts(names, label, w0, w1){
   const bufs=[]; let got=0;
   for(const n of names){
-    let r; try{ const c = await caches.open("deleon-mask-v1"); r = await c.match(n); if(!r){ const f=await fetch(n); if(!f.ok) throw new Error(n+" "+f.status); await c.put(n, f.clone()); r=f; } }
-    catch(e){ r = await fetch(n); if(!r.ok) throw new Error(`Não consegui baixar ${n} (${r.status})`); }
-    const b = new Uint8Array(await r.arrayBuffer()); bufs.push(b); got++;
-    setBar(w0 + (w1-w0)*got/names.length); setStatus(`Baixando ${label}… ${got}/${names.length}`);
+    let r; try{ const c=await caches.open("deleon-mask-v2"); r=await c.match(n); if(!r){ const f=await fetch(n); if(!f.ok) throw new Error(n+" "+f.status); await c.put(n,f.clone()); r=f; } }
+    catch(e){ r=await fetch(n); if(!r.ok) throw new Error(`Não consegui baixar ${n} (${r.status})`); }
+    bufs.push(new Uint8Array(await r.arrayBuffer())); got++;
+    setBar(w0+(w1-w0)*got/names.length); setStatus(`Baixando ${label}… ${got}/${names.length}`);
   }
   const len=bufs.reduce((a,b)=>a+b.length,0), out=new Uint8Array(len); let o=0; for(const b of bufs){ out.set(b,o); o+=b.length; } return out;
 }
-async function loadVocab(){
-  if(st.vocab) return;
-  st.vocab = await (await fetch("m/vocab.json")).json();
-  st.vocabIdx = new Map(st.vocab.map((v,i)=>[v,i]));
-  renderTerms();
+async function loadVocab(){ if(st.vocab) return; st.vocab=await (await fetch("m/vocab.json")).json(); st.vocabIdx=new Map(st.vocab.map((v,i)=>[v,i])); renderTerms(); }
+async function makeSession(bytes){
+  const tries=("gpu" in navigator && navigator.gpu)? ["webgpu","wasm"] : ["wasm"]; let last;
+  for(const ep of tries){ try{ const s=await ort.InferenceSession.create(bytes,{executionProviders:[ep], graphOptimizationLevel:"all"}); return [s,ep]; }catch(e){ last=e; console.warn(ep,e); } }
+  throw new Error("O motor não iniciou neste navegador: "+(last&&last.message));
 }
-async function loadEngine(){
-  if(st.session) return;
+let engineLoading=null;
+function loadEngine(){ return engineLoading ||= (async()=>{
   await loadVocab();
   $("#engineChip").textContent="motor: baixando…"; $("#engineChip").className="chip warn";
-  const peBytes = await fetchParts(["m/vocab_pe.wasm"], "vocabulário", 0, .05);
-  st.pe = new Uint16Array(peBytes.buffer);
+  st.pe = new Uint16Array((await fetchParts(["m/vocab_pe.wasm"],"vocabulário",0,.03)).buffer);
   if(window.DLM_STANDALONE){
-    // site próprio (mask.kayquedeleon.app): runtime servido inteiro, com várias threads quando a página é isolada
     ort.env.wasm.wasmPaths = new URL("vendor/", location.href).href;
     ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(8, navigator.hardwareConcurrency||4) : 1;
   } else {
-    // artefato do Claude: binários só como arquivos .wasm de até 15 MB → junta as partes aqui
-    const wasm = await fetchParts(["m/ortjsep.part0.wasm","m/ortjsep.part1.wasm"], "runtime", .05, .35);
-    ort.env.wasm.numThreads = 1;
-    ort.env.wasm.wasmPaths = { mjs: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort-wasm-simd-threaded.jsep.mjs" };
-    ort.env.wasm.wasmBinary = wasm.buffer;
+    const wasm=await fetchParts(["m/ortjsep.part0.wasm","m/ortjsep.part1.wasm"],"runtime",.03,.2);
+    ort.env.wasm.numThreads=1;
+    ort.env.wasm.wasmPaths={ mjs:"https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort-wasm-simd-threaded.jsep.mjs" };
+    ort.env.wasm.wasmBinary=wasm.buffer;
   }
-  const model = await fetchParts(["m/yoloe_s.part0.wasm","m/yoloe_s.part1.wasm","m/yoloe_s.part2.wasm"], "modelo", .35, 1);
+  st.models = await (await fetch("m/models.json")).json();
+  const y=await fetchParts(["m/yoloe_s.part0.wasm","m/yoloe_s.part1.wasm","m/yoloe_s.part2.wasm"],"detector de texto",.2,.6);
   setStatus("Iniciando o motor…");
-  const tries = ("gpu" in navigator) ? ["webgpu","wasm"] : ["wasm"];
-  let lastErr;
-  for(const ep of tries){
-    try{ st.session = await ort.InferenceSession.create(model, {executionProviders:[ep], graphOptimizationLevel:"all"}); st.engine=ep; break; }
-    catch(e){ lastErr=e; console.warn(ep, e); }
-  }
-  if(!st.session) throw new Error("O motor não iniciou neste navegador: "+(lastErr&&lastErr.message));
-  $("#engineChip").textContent = st.engine==="webgpu" ? "motor: placa de vídeo (WebGPU)" : "motor: processador (WASM)";
-  $("#engineChip").className = "chip on";
+  let ep; [st.yolo,ep]=await makeSession(y); st.engine=ep;
+  await loadCutter(.6,1);
+  $("#engineChip").className="chip on"; setBar(0); setStatus("");
+})().catch(e=>{ engineLoading=null; throw e; }); }
+// recortador: SAM 2.1 (precisão; usa detalhes finos da imagem e sabe quando o objeto saiu de cena) ou MobileSAM (rápido)
+async function gpuHasF16(){ try{ const a=await navigator.gpu?.requestAdapter(); return !!a && a.features.has("shader-f16"); }catch(e){ return false; } }
+async function loadCutter(w0=0, w1=1){
+  const kind=$("#cutter").value; if(st.cutter===kind && st.enc) return;
+  st.enc=null; st.dec=null;
+  let encName="sam_enc", decName="sam_dec";
+  if(kind==="sam2"){ decName="sam2_dec"; encName = (st.engine==="webgpu" && await gpuHasF16()) ? "sam2_enc16" : "sam2_enc32"; }
+  const e=await fetchParts(st.models[encName],"recortador",w0,w0+(w1-w0)*0.85);
+  const d=await fetchParts(st.models[decName],"recortador",w0+(w1-w0)*0.85,w1);
+  setStatus("Iniciando o recortador…");
+  [st.enc]=await makeSession(e); [st.dec]=await makeSession(d); st.cutter=kind; st.encName=encName;
+  $("#engineChip").textContent = (st.engine==="webgpu" ? "placa de vídeo (WebGPU)" : `processador (WASM${ort.env.wasm.numThreads>1?" ×"+ort.env.wasm.numThreads:""})`) + " · " + (kind==="sam2"?"SAM 2.1":"MobileSAM");
   setBar(0); setStatus("");
 }
 function f16(h){ const s=(h&0x8000)?-1:1, e=(h>>10)&31, f=h&1023; if(e===0) return s*Math.pow(2,-14)*(f/1024); if(e===31) return f?NaN:s*Infinity; return s*Math.pow(2,e-15)*(1+f/1024); }
 function buildTpe(terms){
   const t=new Float32Array(NSLOT*512);
-  const use=terms.slice(0,NSLOT);
-  for(let k=0;k<NSLOT;k++){ const src=use[Math.min(k,use.length-1)].idx*512; for(let j=0;j<512;j++) t[k*512+j]=f16(st.pe[src+j]); }
-  return new ort.Tensor("float32", t, [1,NSLOT,512]);
+  for(let k=0;k<NSLOT;k++){ const src=terms[Math.min(k,terms.length-1)].idx*512; for(let j=0;j<512;j++) t[k*512+j]=f16(st.pe[src+j]); }
+  return new ort.Tensor("float32",t,[1,NSLOT,512]);
 }
 
-/* ---------------- vídeo: demux + decode exatos ---------------- */
+/* ================= vídeo: demux + decode exatos ================= */
 async function openVideo(file){
-  const buf = await file.arrayBuffer();
-  const mp4 = MP4Box.createFile();
-  const info = await new Promise((res,rej)=>{
-    mp4.onError = e=>rej(new Error("Arquivo não reconhecido como MP4/MOV."));
-    mp4.onReady = res;
-    const b = buf.slice(0); b.fileStart = 0; mp4.appendBuffer(b); mp4.flush();
-  });
-  const tr = info.videoTracks[0]; if(!tr) throw new Error("O arquivo não tem trilha de vídeo.");
-  const samples = await new Promise(res=>{
-    const all=[]; mp4.onSamples=(id,u,ss)=>{ all.push(...ss); if(all.length>=tr.nb_samples) res(all); };
-    mp4.setExtractionOptions(tr.id, null, {nbSamples: 1e9}); mp4.start();
-    setTimeout(()=>res(all), 4000);
-  });
-  const trak = mp4.getTrackById(tr.id); let description;
+  const buf=await file.arrayBuffer(); const mp4=MP4Box.createFile();
+  const info=await new Promise((res,rej)=>{ mp4.onError=()=>rej(new Error("Arquivo não reconhecido como MP4/MOV.")); mp4.onReady=res; const b=buf.slice(0); b.fileStart=0; mp4.appendBuffer(b); mp4.flush(); });
+  const tr=info.videoTracks[0]; if(!tr) throw new Error("O arquivo não tem trilha de vídeo.");
+  const samples=await new Promise(res=>{ const all=[]; mp4.onSamples=(id,u,ss)=>{ all.push(...ss); if(all.length>=tr.nb_samples) res(all); }; mp4.setExtractionOptions(tr.id,null,{nbSamples:1e9}); mp4.start(); setTimeout(()=>res(all),4000); });
+  const trak=mp4.getTrackById(tr.id); let description;
   for(const e of trak.mdia.minf.stbl.stsd.entries){ const bx=e.avcC||e.hvcC||e.vpcC||e.av1C; if(bx){ const s=new DataStream(undefined,0,DataStream.BIG_ENDIAN); bx.write(s); description=new Uint8Array(s.buffer,8); break; } }
-  const cfg = {codec: tr.codec.startsWith("vp08")?"vp8":tr.codec, codedWidth: tr.video.width, codedHeight: tr.video.height, description};
-  const sup = await VideoDecoder.isConfigSupported(cfg).catch(()=>({supported:false}));
+  const cfg={codec:tr.codec.startsWith("vp08")?"vp8":tr.codec, codedWidth:tr.video.width, codedHeight:tr.video.height, description};
+  const sup=await VideoDecoder.isConfigSupported(cfg).catch(()=>({supported:false}));
   if(!sup.supported) throw new Error(`Este navegador não decodifica ${tr.codec}. Tente Chrome/Edge ou exporte em H.264.`);
-  const m = tr.matrix || [65536,0,0,0,65536,0,0,0,1073741824];
-  let rot = Math.round(Math.atan2(m[1], m[0])*180/Math.PI); rot = ((rot%360)+360)%360;
-  const cw=tr.video.width, ch=tr.video.height;
-  const W = (rot===90||rot===270)? ch : cw, H = (rot===90||rot===270)? cw : ch;
-  const ts = samples.map(s=>s.cts/s.timescale).sort((a,b)=>a-b);
-  const dur = (ts[ts.length-1]-ts[0]) + samples[samples.length-1].duration/samples[0].timescale;
-  const fps = samples.length / dur;
-  return {name:file.name, file, samples, cfg, W, H, rot, nFrames:samples.length, fps, dur, codec:tr.codec, timescale:tr.timescale};
+  const m=tr.matrix||[65536,0,0,0,65536,0,0,0,1073741824];
+  let rot=Math.round(Math.atan2(m[1],m[0])*180/Math.PI); rot=((rot%360)+360)%360;
+  const cw=tr.video.width, ch=tr.video.height, W=(rot===90||rot===270)?ch:cw, H=(rot===90||rot===270)?cw:ch;
+  const ts=samples.map(s=>Math.round(1e6*s.cts/s.timescale)).sort((a,b)=>a-b);
+  const dur=(ts[ts.length-1]-ts[0])/1e6 + samples[samples.length-1].duration/samples[0].timescale;
+  return {name:file.name, file, samples, cfg, W, H, rot, nFrames:samples.length, fps:samples.length/dur, dur, codec:tr.codec, ts, tsIdx:new Map(ts.map((t,i)=>[t,i]))};
 }
 async function* decodeAll(v){
   const q=[]; let wake=null, err=null, flushed=false, done=false;
   const ping=()=>{ if(wake){ const w=wake; wake=null; w(); } };
-  const dec = new VideoDecoder({output:f=>{ q.push(f); ping(); }, error:e=>{ err=e; ping(); }});
-  dec.configure(v.cfg);
-  let si=0, out=0;
-  const chunk = s => new EncodedVideoChunk({type:s.is_sync?"key":"delta", timestamp:Math.round(1e6*s.cts/s.timescale), duration:Math.round(1e6*s.duration/s.timescale), data:s.data});
+  const dec=new VideoDecoder({output:f=>{ q.push(f); ping(); }, error:e=>{ err=e; ping(); }});
+  dec.configure(v.cfg); let si=0, out=0;
+  const chunk=s=>new EncodedVideoChunk({type:s.is_sync?"key":"delta", timestamp:Math.round(1e6*s.cts/s.timescale), duration:Math.round(1e6*s.duration/s.timescale), data:s.data});
   try{
-    while(out < v.nFrames){
+    while(out<v.nFrames){
       if(err) throw err;
-      while(si<v.nFrames && q.length + dec.decodeQueueSize < 8){ dec.decode(chunk(v.samples[si++])); }
+      while(si<v.nFrames && q.length+dec.decodeQueueSize<8) dec.decode(chunk(v.samples[si++]));
       if(si===v.nFrames && !flushed){ flushed=true; dec.flush().then(()=>{ done=true; ping(); }, e=>{ err=e; ping(); }); }
       if(!q.length){ if(done) break; await new Promise(r=>{ wake=r; setTimeout(ping,200); }); continue; }
       out++; yield q.shift();
@@ -361,151 +365,212 @@ async function* decodeAll(v){
 }
 function drawFrame(vf, ctx, W, H, rot){
   ctx.save(); ctx.setTransform(1,0,0,1,0,0);
-  if(rot===90){ ctx.translate(W,0); ctx.rotate(Math.PI/2); }
-  else if(rot===180){ ctx.translate(W,H); ctx.rotate(Math.PI); }
-  else if(rot===270){ ctx.translate(0,H); ctx.rotate(-Math.PI/2); }
-  ctx.drawImage(vf, 0, 0); ctx.restore();
+  if(rot===90){ ctx.translate(W,0); ctx.rotate(Math.PI/2); } else if(rot===180){ ctx.translate(W,H); ctx.rotate(Math.PI); } else if(rot===270){ ctx.translate(0,H); ctx.rotate(-Math.PI/2); }
+  ctx.drawImage(vf,0,0); ctx.restore();
 }
+function frameIdx(v, ts){ const i=v.tsIdx.get(ts); if(i!==undefined) return i; let b=0,bd=Infinity; v.ts.forEach((t,k)=>{ const d=Math.abs(t-ts); if(d<bd){ bd=d; b=k; } }); return b; }
 
-/* ---------------- inferência ---------------- */
-const lbC = new OffscreenCanvas(S,S), lbX = lbC.getContext("2d",{willReadFrequently:true});
-function letterbox(srcCanvas, rx, ry, rw, rh){
-  const s = Math.min(S/rw, S/rh), nw=rw*s, nh=rh*s, px=(S-nw)/2, py=(S-nh)/2;
-  lbX.fillStyle="rgb(114,114,114)"; lbX.fillRect(0,0,S,S);
-  lbX.imageSmoothingQuality="high"; lbX.drawImage(srcCanvas, rx, ry, rw, rh, px, py, nw, nh);
-  const d = lbX.getImageData(0,0,S,S).data, x=new Float32Array(3*S*S), A=S*S;
+/* ================= YOLOE: texto → caixas ================= */
+const lbC=new OffscreenCanvas(S,S), lbX=lbC.getContext("2d",{willReadFrequently:true});
+async function detect(cv, W, H, terms, conf){
+  const s=Math.min(S/W,S/H), nw=W*s, nh=H*s, px=(S-nw)/2, py=(S-nh)/2;
+  lbX.fillStyle="rgb(114,114,114)"; lbX.fillRect(0,0,S,S); lbX.imageSmoothingQuality="high"; lbX.drawImage(cv.fc,0,0,W,H,px,py,nw,nh);
+  const d=lbX.getImageData(0,0,S,S).data, x=new Float32Array(3*S*S), A=S*S;
   for(let i=0,p=0;i<A;i++,p+=4){ x[i]=d[p]/255; x[A+i]=d[p+1]/255; x[2*A+i]=d[p+2]/255; }
-  return {tensor:new ort.Tensor("float32",x,[1,3,S,S]), s, px, py, rx, ry, rw, rh};
-}
-function iou(a,b){ const x1=Math.max(a[0],b[0]),y1=Math.max(a[1],b[1]),x2=Math.min(a[2],b[2]),y2=Math.min(a[3],b[3]); const i=Math.max(0,x2-x1)*Math.max(0,y2-y1); const u=(a[2]-a[0])*(a[3]-a[1])+(b[2]-b[0])*(b[3]-b[1])-i; return u>0?i/u:0; }
-async function infer(lb, nT, conf){
-  const r = await st.session.run({images: lb.tensor, tpe: st._tpe});
-  const o = r.output0.data, proto = r.output1.data;
-  const dets=[];
-  for(let a=0;a<NA;a++){
-    let bk=-1, bs=conf;
-    for(let k=0;k<nT;k++){ const sc=o[(4+k)*NA+a]; if(sc>bs){ bs=sc; bk=k; } }
-    if(bk<0) continue;
-    const cx=o[a], cy=o[NA+a], w=o[2*NA+a], h=o[3*NA+a];
-    dets.push({k:bk, conf:bs, b:[cx-w/2, cy-h/2, cx+w/2, cy+h/2], a});
-  }
-  dets.sort((p,q)=>q.conf-p.conf);
-  const keep=[];
-  for(const d of dets){ if(keep.every(e=>e.k!==d.k || iou(e.b,d.b)<0.6)) keep.push(d); if(keep.length>=200) break; }
-  for(const d of keep){
-    d.coef = new Float32Array(32); for(let j=0;j<32;j++) d.coef[j]=o[(4+NSLOT+j)*NA+d.a];
-    // caixa em coordenadas do quadro (ou do recorte)
-    d.fb = [ (d.b[0]-lb.px)/lb.s + lb.rx, (d.b[1]-lb.py)/lb.s + lb.ry, (d.b[2]-lb.px)/lb.s + lb.rx, (d.b[3]-lb.py)/lb.s + lb.ry ];
-  }
-  return {dets:keep, proto, lb};
-}
-const m160 = new OffscreenCanvas(PROTO,PROTO), m160x = m160.getContext("2d",{willReadFrequently:true});
-const m160img = m160x.createImageData(PROTO,PROTO);
-function detMaskTo(ctx, det, proto, lb, tW, tH){
-  // máscara do objeto no espaço 160 (só dentro da caixa) -> desenha escalada no destino com "lighten"
-  const id=m160img.data; id.fill(0); for(let i=3;i<id.length;i+=4) id[i]=255;
-  const q=PROTO/S, A=PROTO*PROTO;
-  const x0=Math.max(0,Math.floor(det.b[0]*q)), y0=Math.max(0,Math.floor(det.b[1]*q)), x1=Math.min(PROTO,Math.ceil(det.b[2]*q)), y1=Math.min(PROTO,Math.ceil(det.b[3]*q));
-  for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++){
-    const p=y*PROTO+x; let v=0; for(let j=0;j<32;j++) v+=det.coef[j]*proto[j*A+p];
-    const m=255/(1+Math.exp(-v)); const o=p*4; id[o]=id[o+1]=id[o+2]=m;
-  }
-  m160x.putImageData(m160img,0,0);
-  const sx=lb.px*q, sy=lb.py*q, sw=lb.rw*lb.s*q, sh=lb.rh*lb.s*q;
-  ctx.globalCompositeOperation="lighten"; ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
-  ctx.drawImage(m160, sx, sy, sw, sh, lb.rx, lb.ry, lb.rw, lb.rh);
-  ctx.globalCompositeOperation="source-over";
+  const r=await st.yolo.run({images:new ort.Tensor("float32",x,[1,3,S,S]), tpe:st._tpe});
+  const o=r.output0.data, nT=Math.min(terms.length,NSLOT), dets=[];
+  for(let a=0;a<NA;a++){ let bk=-1,bs=conf; for(let k=0;k<nT;k++){ const sc=o[(4+k)*NA+a]; if(sc>bs){ bs=sc; bk=k; } } if(bk<0) continue;
+    const cx=o[a],cy=o[NA+a],w=o[2*NA+a],h=o[3*NA+a]; dets.push({k:bk,conf:bs,b:[(cx-w/2-px)/s,(cy-h/2-py)/s,(cx+w/2-px)/s,(cy+h/2-py)/s]}); }
+  dets.sort((p,q)=>q.conf-p.conf); const keep=[];
+  for(const d of dets){ if(keep.every(e=>e.k!==d.k||iou(e.b,d.b)<0.6)) keep.push(d); if(keep.length>=60) break; }
+  for(const d of keep){ d.b=[clamp(d.b[0],0,W),clamp(d.b[1],0,H),clamp(d.b[2],0,W),clamp(d.b[3],0,H)]; }
+  return keep;
 }
 
-/* ---------------- pós-processamento ---------------- */
-function boxBlur(src, W, H, r, out){ // média em janela (2r+1)^2 via integral separável
-  const tmp=new Float32Array(W*H); out=out||new Float32Array(W*H);
-  for(let y=0;y<H;y++){ const o=y*W; let acc=0; const n=2*r+1;
-    for(let x=-r;x<=r;x++) acc+=src[o+Math.min(W-1,Math.max(0,x))];
+/* ================= SAM: caixa/pins + máscara anterior → contorno ================= */
+const samC=new OffscreenCanvas(SAMS,SAMS), samX=samC.getContext("2d",{willReadFrequently:true});
+async function samEncode(cv, rect){
+  const s=SAMS/Math.max(rect.w,rect.h), nw=Math.round(rect.w*s), nh=Math.round(rect.h*s);
+  samX.fillStyle="rgb(124,116,104)"; samX.fillRect(0,0,SAMS,SAMS); samX.imageSmoothingQuality="high";
+  samX.drawImage(cv.fc, rect.x, rect.y, rect.w, rect.h, 0, 0, nw, nh);
+  const d=samX.getImageData(0,0,SAMS,SAMS).data, A=SAMS*SAMS, x=new Float32Array(3*A);
+  for(let i=0,p=0;i<A;i++,p+=4){ x[i]=(d[p]-SAM_MEAN[0])/SAM_STD[0]; x[A+i]=(d[p+1]-SAM_MEAN[1])/SAM_STD[1]; x[2*A+i]=(d[p+2]-SAM_MEAN[2])/SAM_STD[2]; }
+  const r=await st.enc.run({image:new ort.Tensor("float32",x,[1,3,SAMS,SAMS])});
+  return {emb:r.emb, s0:r.s0, s1:r.s1, rect, s, nw, nh};
+}
+async function samDecode(E, prompts, maskIn, small){
+  const co=new Float32Array(NP*2), la=new Float32Array(NP).fill(-1);
+  prompts.slice(0,NP).forEach((p,i)=>{ co[2*i]=(p.x-E.rect.x)*E.s; co[2*i+1]=(p.y-E.rect.y)*E.s; la[i]=p.l; });
+  const feeds={emb:E.emb, coords:new ort.Tensor("float32",co,[1,NP,2]), labels:new ort.Tensor("float32",la,[1,NP]),
+    mask_in:new ort.Tensor("float32", maskIn||new Float32Array(65536), [1,1,256,256]), has_mask:new ort.Tensor("float32", new Float32Array([maskIn?1:0]), [1])};
+  if(E.s0){ feeds.s0=E.s0; feeds.s1=E.s1; }
+  const r=await st.dec.run(feeds);
+  if(r.obj && r.obj.data[0] < 0) return {logits:new Float32Array(65536).fill(-20), score:0, gone:true}; // SAM 2: o objeto não está neste frame
+  const m=r.masks.data, iou=r.iou.data;
+  const hasBox=prompts.some(p=>p.l===2), nPts=prompts.filter(p=>p.l===0||p.l===1).length;
+  let pick=0;
+  if(!hasBox && nPts===1 && !maskIn){
+    pick=1; for(let k=2;k<4;k++) if(iou[k]>iou[pick]) pick=k;
+    if(small){ // pin de peça: o menor pedaço coerente (o microfone, não a pessoa inteira)
+      let bestA=Infinity; for(let k=1;k<4;k++){ if(iou[k]<0.72) continue; let a=0; const o=k*65536; for(let i=0;i<65536;i++) if(m[o+i]>0) a++; if(a>30 && a<bestA){ bestA=a; pick=k; } } } }
+  return {logits:m.slice(pick*65536,(pick+1)*65536), score:iou[pick]};
+}
+function warpLogits(prev, cur){ // leva a máscara do recorte anterior para o recorte atual (mesmo lugar no quadro)
+  const out=new Float32Array(65536), L=prev.logits;
+  for(let cy=0;cy<256;cy++) for(let cx=0;cx<256;cx++){
+    const X=(cx+0.5)*4, Y=(cy+0.5)*4; let v=-20;
+    if(X<cur.nw && Y<cur.nh){
+      const fx=cur.rect.x+X/cur.s, fy=cur.rect.y+Y/cur.s, PX=(fx-prev.rect.x)*prev.s, PY=(fy-prev.rect.y)*prev.s;
+      if(PX>=0 && PY>=0 && PX<prev.nw && PY<prev.nh){
+        const lx=clamp(PX/4-0.5,0,255), ly=clamp(PY/4-0.5,0,255), x0=lx|0, y0=ly|0, x1=Math.min(255,x0+1), y1=Math.min(255,y0+1), fx2=lx-x0, fy2=ly-y0;
+        v=(L[y0*256+x0]*(1-fx2)+L[y0*256+x1]*fx2)*(1-fy2)+(L[y1*256+x0]*(1-fx2)+L[y1*256+x1]*fx2)*fy2;
+      }
+    }
+    out[cy*256+cx]=v;
+  }
+  return out;
+}
+function logitsToMask(E, logits){ // 256² → recorte em resolução cheia (probabilidade 0..1, borda antisserrilhada)
+  const R=E.rect, w=R.w, h=R.h, data=new Float32Array(w*h);
+  for(let y=0;y<h;y++){ const ly=clamp(((y+0.5)*E.s)/4-0.5,0,255), y0=ly|0, y1=Math.min(255,y0+1), fy=ly-y0;
+    for(let x=0;x<w;x++){ const lx=clamp(((x+0.5)*E.s)/4-0.5,0,255), x0=lx|0, x1=Math.min(255,x0+1), fx=lx-x0;
+      const v=(logits[y0*256+x0]*(1-fx)+logits[y0*256+x1]*fx)*(1-fy)+(logits[y1*256+x0]*(1-fx)+logits[y1*256+x1]*fx)*fy;
+      data[y*w+x]=1/(1+Math.exp(-v)); } }
+  return {rect:R, data};
+}
+function cleanMask(M, obj, P){ // remove ilhas e preenche furos pequenos, no recorte
+  const {w,h}=M.rect, n=w*h, d=M.data, lab=new Int32Array(n), par=[0];
+  const find=a=>{ while(par[a]!==a){ par[a]=par[par[a]]; a=par[a]; } return a; };
+  const label=(fg)=>{ lab.fill(0); par.length=1; let next=1;
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x; if((d[i]>=0.5)!==fg) continue;
+      const nb=[]; if(x>0&&((d[i-1]>=0.5)===fg)) nb.push(lab[i-1]); if(y>0&&((d[i-w]>=0.5)===fg)) nb.push(lab[i-w]);
+      if(fg){ if(x>0&&y>0&&d[i-w-1]>=0.5) nb.push(lab[i-w-1]); if(x<w-1&&y>0&&d[i-w+1]>=0.5) nb.push(lab[i-w+1]); }
+      if(!nb.length){ par.push(next); lab[i]=next++; } else { let m=find(nb[0]); for(const b of nb){ const r=find(b); if(r<m) m=r; } for(const b of nb){ const r=find(b); if(r!==m) par[r]=m; } lab[i]=m; } }
+    const area=new Map(); for(let i=0;i<n;i++) if(lab[i]){ const r=find(lab[i]); lab[i]=r; area.set(r,(area.get(r)||0)+1); }
+    return area; };
+  if(P.islands){
+    const area=label(true); if(area.size>1){
+      let big=0, bigA=0; for(const [r,a] of area) if(a>bigA){ bigA=a; big=r; }
+      const keep=new Set([big]); for(const [r,a] of area) if(a>=0.15*bigA) keep.add(r);
+      for(const p of obj.pinsAbs||[]){ if(p.l!==1) continue; const x=Math.round(p.x-M.rect.x), y=Math.round(p.y-M.rect.y); if(x>=0&&y>=0&&x<w&&y<h&&lab[y*w+x]) keep.add(lab[y*w+x]); }
+      for(let i=0;i<n;i++){ if(lab[i] && !keep.has(lab[i])) d[i]=0; }
+    }
+  }
+  if(P.holes){
+    let fgA=0; for(let i=0;i<n;i++) if(d[i]>=0.5) fgA++;
+    const area=label(false), border=new Set();
+    for(let x=0;x<w;x++){ border.add(lab[x]); border.add(lab[(h-1)*w+x]); } for(let y=0;y<h;y++){ border.add(lab[y*w]); border.add(lab[y*w+w-1]); }
+    const lim=0.01*fgA; for(let i=0;i<n;i++){ const r=lab[i]; if(r && !border.has(r) && area.get(r)<lim) d[i]=1; }
+  }
+  return M;
+}
+function maskBox(M){ const {x:ox,y:oy,w,h}=M.rect; let x1=1e9,y1=1e9,x2=-1,y2=-1;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++) if(M.data[y*w+x]>=0.5){ if(x<x1)x1=x; if(x>x2)x2=x; if(y<y1)y1=y; if(y>y2)y2=y; }
+  return x2<0? null : [ox+x1, oy+y1, ox+x2+1, oy+y2+1]; }
+// recorte em volta do objeto. O modelo piora muito com imagem ampliada, então o recorte nunca é
+// menor que ~820 px (ampliação máx. ~1,25×): em 1080p quase sempre vira o quadro inteiro; em 4K dá o zoom que importa.
+const MIN_SIDE = Math.round(SAMS/1.25);
+function cropRect(b, W, H, margin){ const bw=b[2]-b[0], bh=b[3]-b[1], m=Math.max(24, margin*Math.max(bw,bh));
+  let x1=b[0]-m, y1=b[1]-m, x2=b[2]+m, y2=b[3]+m;
+  const side=Math.min(Math.max(W,H), MIN_SIDE);
+  if(Math.max(x2-x1,y2-y1) < side){ const cx=(x1+x2)/2, cy=(y1+y2)/2, hw=Math.max(x2-x1,side)/2, hh=Math.max(y2-y1, side*Math.min(1,H/W*1.0))/2;
+    x1=cx-hw; x2=cx+hw; y1=cy-hh; y2=cy+hh;
+    if(x1<0){ x2-=x1; x1=0; } if(x2>W){ x1-=x2-W; x2=W; } if(y1<0){ y2-=y1; y1=0; } if(y2>H){ y1-=y2-H; y2=H; } }
+  const x=Math.floor(clamp(x1,0,W-1)), y=Math.floor(clamp(y1,0,H-1)), xe=Math.ceil(clamp(x2,1,W)), ye=Math.ceil(clamp(y2,1,H));
+  return {x, y, w:Math.max(8,xe-x), h:Math.max(8,ye-y)}; }
+
+/* ---- objetos ----
+   obj = {id, k (termo do texto ou -1 manual), sign, box, pins:[{u,v,l}] relativos à caixa de referência,
+          prev:{rect,s,nw,nh,logits}, mask:{rect,data}, mb (caixa da máscara), miss, label}           */
+function pinsFor(obj){ const b=obj.box, bw=b[2]-b[0], bh=b[3]-b[1];
+  return obj.pins.map(p=>({x:b[0]+p.u*bw, y:b[1]+p.v*bh, l:p.l})); }
+async function segmentObject(cv, W, H, obj, P, shared){
+  const E = shared || await samEncode(cv, cropRect(obj.box, W, H, 0.22));
+  obj.pinsAbs = obj.pins.length? pinsFor(obj) : [];
+  const prompts = [];
+  if(!obj.pinOnly || obj.prev) prompts.push({x:obj.box[0],y:obj.box[1],l:2},{x:obj.box[2],y:obj.box[3],l:3});
+  for(const p of obj.pinsAbs) prompts.push(p);
+  const maskIn = obj.prev ? warpLogits(obj.prev, E) : null;
+  const small = !!(obj.parent && obj.pinOnly);
+  let D = await samDecode(E, prompts, maskIn, small);
+  if(maskIn && !D.gone && D.score < 0.7){ const D2 = await samDecode(E, prompts, null); if(D2.score > D.score) D = D2; } // guia ruim: recomeça só com caixa/pins
+  obj.score = D.score;
+  obj.prev = {rect:E.rect, s:E.s, nw:E.nw, nh:E.nh, logits:D.logits};
+  const M = cleanMask(logitsToMask(E, D.logits), obj, P);
+  obj.mask = M; const mb = maskBox(M);
+  if(mb){ obj.mb = mb; obj.miss = obj.miss||0; } else { obj.mb = null; obj.miss = (obj.miss||0)+1; }
+  return obj;
+}
+function cloneObj(o){ return {parent:o.parent, region:o.region, id:o.id,k:o.k,sign:o.sign,label:o.label,active:o.active,pinOnly:o.pinOnly,box:o.box.slice(),pins:o.pins.map(p=>({...p})),
+  prev:o.prev?{...o.prev, logits:o.prev.logits.slice()}:null, mask:null, mb:o.mb?o.mb.slice():null, miss:0, conf:o.conf}; }
+function smoothBox(det, mb){ if(!mb) return det.slice(); return det.map((v,i)=>0.65*v+0.35*mb[i]); }
+
+/* um passo de rastreamento num frame (frente ou trás) */
+async function trackFrame(cv, W, H, objs, terms, P, allowNew){
+  const textTerms = terms.length>0;
+  if(textTerms){
+    const dets = await detect(cv, W, H, terms, Math.min(P.conf, 0.2));
+    const used = new Set();
+    // casa detecções com objetos (mesmo termo, melhor IoU com a máscara anterior)
+    const pairs=[]; objs.forEach((o,oi)=>{ if(o.k<0) return; const ref=o.mb||o.box; dets.forEach((d,di)=>{ if(d.k===o.k){ const v=iou(ref,d.b); if(v>0.25) pairs.push([v,oi,di]); } }); });
+    pairs.sort((a,b)=>b[0]-a[0]); const doneO=new Set();
+    for(const [v,oi,di] of pairs){ if(doneO.has(oi)||used.has(di)) continue; doneO.add(oi); used.add(di); objs[oi].box=smoothBox(dets[di].b, objs[oi].mb); objs[oi].seen=0; }
+    objs.forEach((o,oi)=>{ if(o.k>=0 && !doneO.has(oi)){ if(o.mb) o.box=o.mb.slice(); o.seen=(o.seen||0)+1; } });
+    if(allowNew){
+      for(let di=0;di<dets.length;di++){ const d=dets[di]; if(used.has(di) || d.conf<P.conf) continue;
+        if(objs.some(o=>o.k===d.k && iou(o.mb||o.box,d.b)>0.15)) continue;
+        objs.push({id:st.nextId++, k:d.k, sign:terms[d.k].sign, label:terms[d.k].label, active:true, box:d.b.slice(), pins:[], prev:null, mb:null, miss:0, seen:0, conf:d.conf}); }
+    }
+  }
+  for(const o of objs){ if(o.k<0 && o.mb) o.box=o.mb.slice(); }
+  // vivos: os que ainda têm máscara e não passaram do limite sem detecção
+  const live = objs.filter(o=>o.active && o.miss<=2 && (o.k<0 || (o.seen||0)<=P.hold));
+  const shared = live.length>4 ? await samEncode(cv, {x:0,y:0,w:W,h:H}) : null;
+  for(const o of live) await segmentObject(cv, W, H, o, P, shared);
+  for(const o of objs) if(!live.includes(o)) o.mask=null;
+  return compose(objs, W, H);
+}
+function compose(objs, W, H){
+  const q=new Float32Array(W*H); let neg=null;
+  for(const o of objs){ if(!o.mask || !o.active) continue; const {rect:R,data}=o.mask;
+    if(o.sign>0){ for(let y=0;y<R.h;y++){ const row=(R.y+y)*W+R.x, src=y*R.w; for(let x=0;x<R.w;x++){ const v=data[src+x]; if(v>q[row+x]) q[row+x]=v; } } }
+    else { neg ||= new Float32Array(W*H); for(let y=0;y<R.h;y++){ const row=(R.y+y)*W+R.x, src=y*R.w; for(let x=0;x<R.w;x++){ const v=data[src+x]; if(v>neg[row+x]) neg[row+x]=v; } } } }
+  if(neg) for(let i=0;i<q.length;i++) q[i]*=1-neg[i];
+  return q;
+}
+
+/* ================= filtros ================= */
+function boxBlur(src, W, H, r){ const tmp=new Float32Array(W*H), out=new Float32Array(W*H), n=2*r+1;
+  for(let y=0;y<H;y++){ const o=y*W; let acc=0; for(let x=-r;x<=r;x++) acc+=src[o+clamp(x,0,W-1)];
     for(let x=0;x<W;x++){ tmp[o+x]=acc/n; acc+=src[o+Math.min(W-1,x+r+1)]-src[o+Math.max(0,x-r)]; } }
-  for(let x=0;x<W;x++){ let acc=0; const n=2*r+1;
-    for(let y=-r;y<=r;y++) acc+=tmp[Math.min(H-1,Math.max(0,y))*W+x];
+  for(let x=0;x<W;x++){ let acc=0; for(let y=-r;y<=r;y++) acc+=tmp[clamp(y,0,H-1)*W+x];
     for(let y=0;y<H;y++){ out[y*W+x]=acc/n; acc+=tmp[Math.min(H-1,y+r+1)*W+x]-tmp[Math.max(0,y-r)*W+x]; } }
-  return out;
+  return out; }
+function guidedRegion(cv, q, W, H, r){ // filtro guiado só onde há borda (caixa da máscara)
+  let x1=W,y1=H,x2=-1,y2=-1; for(let y=0;y<H;y+=2) for(let x=0;x<W;x+=2){ const v=q[y*W+x]; if(v>0.02&&v<0.98){ if(x<x1)x1=x; if(x>x2)x2=x; if(y<y1)y1=y; if(y>y2)y2=y; } }
+  if(x2<0) return; const m=4*r+4; x1=Math.max(0,x1-m); y1=Math.max(0,y1-m); x2=Math.min(W,x2+m); y2=Math.min(H,y2+m);
+  const w=x2-x1, h=y2-y1, fd=cv.fx.getImageData(x1,y1,w,h).data, I=new Float32Array(w*h), p=new Float32Array(w*h);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x, j=i*4; I[i]=(0.299*fd[j]+0.587*fd[j+1]+0.114*fd[j+2])/255; p[i]=q[(y1+y)*W+x1+x]; }
+  const N=w*h, Ip=new Float32Array(N), II=new Float32Array(N); for(let i=0;i<N;i++){ Ip[i]=I[i]*p[i]; II[i]=I[i]*I[i]; }
+  const mI=boxBlur(I,w,h,r), mp=boxBlur(p,w,h,r), mIp=boxBlur(Ip,w,h,r), mII=boxBlur(II,w,h,r);
+  for(let i=0;i<N;i++){ const a=(mIp[i]-mI[i]*mp[i])/(mII[i]-mI[i]*mI[i]+2e-4); Ip[i]=a; II[i]=mp[i]-a*mI[i]; }
+  const ma=boxBlur(Ip,w,h,r), mb=boxBlur(II,w,h,r);
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x; let v=(ma[i]*I[i]+mb[i]-0.2)/0.6; // só mexe perto da borda original
+    const o=q[(y1+y)*W+x1+x]; if(o>0.002&&o<0.998 || Math.abs(v-o)<0.5) q[(y1+y)*W+x1+x]=clamp(0.5*o+0.5*clamp(v,0,1),0,1); }
 }
-function guided(I, p, W, H, r, eps){
-  const N=W*H, Ip=new Float32Array(N), II=new Float32Array(N);
-  for(let i=0;i<N;i++){ Ip[i]=I[i]*p[i]; II[i]=I[i]*I[i]; }
-  const mI=boxBlur(I,W,H,r), mp=boxBlur(p,W,H,r), mIp=boxBlur(Ip,W,H,r), mII=boxBlur(II,W,H,r);
-  const a=Ip, b=II;
-  for(let i=0;i<N;i++){ const cov=mIp[i]-mI[i]*mp[i], v=mII[i]-mI[i]*mI[i]; a[i]=cov/(v+eps); b[i]=mp[i]-a[i]*mI[i]; }
-  const ma=boxBlur(a,W,H,r), mb=boxBlur(b,W,H,r);
-  for(let i=0;i<N;i++){ let q=(ma[i]*I[i]+mb[i]-0.2)/0.6; p[i]=q<0?0:q>1?1:q; } // níveis: corta o rastro fraco do filtro, mantém 1–3 px de antisserrilhado
-  return p;
-}
-function morph(bin, W, H, r, dilate){ // filtro máx/mín separável (quadrado)
-  const tmp=new Uint8Array(W*H), out=new Uint8Array(W*H), f=dilate?Math.max:Math.min;
-  for(let y=0;y<H;y++){ const o=y*W; for(let x=0;x<W;x++){ let v=dilate?0:1; for(let k=Math.max(0,x-r);k<=Math.min(W-1,x+r);k++){ v=f(v,bin[o+k]); if(v===(dilate?1:0)) break; } tmp[o+x]=v; } }
-  for(let x=0;x<W;x++){ for(let y=0;y<H;y++){ let v=dilate?0:1; for(let k=Math.max(0,y-r);k<=Math.min(H-1,y+r);k++){ v=f(v,tmp[k*W+x]); if(v===(dilate?1:0)) break; } out[y*W+x]=v; } }
-  return out;
-}
-function finish(q, W, H, P){ // q Float32 0..1 -> Uint8 0..255
+function morph(bin, W, H, r, dilate){ const tmp=new Uint8Array(W*H), out=new Uint8Array(W*H), t=dilate?1:0;
+  for(let y=0;y<H;y++){ const o=y*W; for(let x=0;x<W;x++){ let v=1-t; for(let k=Math.max(0,x-r);k<=Math.min(W-1,x+r);k++){ if(bin[o+k]===t){ v=t; break; } } tmp[o+x]=v; } }
+  for(let x=0;x<W;x++) for(let y=0;y<H;y++){ let v=1-t; for(let k=Math.max(0,y-r);k<=Math.min(H-1,y+r);k++){ if(tmp[k*W+x]===t){ v=t; break; } } out[y*W+x]=v; }
+  return out; }
+function finish(q, W, H, P){
   let m=q;
   if(P.grow!==0){ const bin=new Uint8Array(W*H); for(let i=0;i<W*H;i++) bin[i]=m[i]>=0.5?1:0; const r=morph(bin,W,H,Math.abs(P.grow),P.grow>0); m=new Float32Array(W*H); for(let i=0;i<W*H;i++) m[i]=r[i]; }
   else if(P.hard){ m=new Float32Array(W*H); for(let i=0;i<W*H;i++) m[i]=q[i]>=0.5?1:0; }
   if(P.feather>0){ const r=Math.max(1,Math.round(P.feather)); m=boxBlur(boxBlur(boxBlur(m,W,H,r),W,H,r),W,H,r); }
-  const out=new Uint8Array(W*H);
-  for(let i=0;i<W*H;i++){ let v=m[i]; if(P.invert) v=1-v; out[i]= v<=0?0: v>=1?255 : Math.round(v*255); }
-  return out;
-}
+  const out=new Uint8Array(W*H); for(let i=0;i<W*H;i++){ let v=m[i]; if(P.invert) v=1-v; out[i]=v<=0?0:v>=1?255:Math.round(v*255); }
+  return out; }
 
-/* ---------------- máscara de um frame ---------------- */
-function readParams(){
-  return { conf:+$("#conf").value, edge:+$("#edge").value, grow:+$("#grow").value, feather:+$("#feather").value,
-           smooth:+$("#smooth").value, hold:+$("#hold").value, hard:$("#hard").checked, invert:$("#invert").checked, quality:st.quality };
-}
-function makeCanvases(W,H){
-  const fc=new OffscreenCanvas(W,H), pc=new OffscreenCanvas(W,H), nc=new OffscreenCanvas(W,H);
-  return {fc, fx:fc.getContext("2d",{willReadFrequently:true}), pc, px:pc.getContext("2d",{willReadFrequently:true}), nc, nx:nc.getContext("2d",{willReadFrequently:true})};
-}
-async function maskForFrame(cv, W, H, terms, P, chosen /* null=todos | [{b:[..], k}] */, memo){
-  const nT=Math.min(terms.length,NSLOT);
-  const full = letterbox(cv.fc, 0, 0, W, H);
-  const R = await infer(full, nT, chosen? Math.min(P.conf,0.15) : P.conf);
-  let pos = R.dets.filter(d=>terms[d.k].sign>0), neg = R.dets.filter(d=>terms[d.k].sign<0);
-  if(chosen){ // segue os objetos marcados: melhor IoU com a última caixa conhecida
-    const picked=[];
-    for(const c of chosen){ let best=null, bi=0.2; for(const d of pos){ if(d.k!==c.k) continue; const v=iou(d.fb,c.b); if(v>bi){ bi=v; best=d; } } if(best){ picked.push(best); c.b=best.fb; c.miss=0; } else c.miss=(c.miss||0)+1; }
-    pos = picked.filter(d=>d.conf>=Math.min(P.conf,0.15));
-  }
-  cv.px.globalCompositeOperation="source-over"; cv.px.fillStyle="#000"; cv.px.fillRect(0,0,W,H);
-  cv.nx.fillStyle="#000"; cv.nx.fillRect(0,0,W,H);
-  // refino por recorte: roda o modelo de novo num recorte ampliado de cada objeto (até 6 maiores)
-  const refine = P.quality==="high" ? new Set(pos.slice().sort((a,b)=>(b.fb[2]-b.fb[0])*(b.fb[3]-b.fb[1])-(a.fb[2]-a.fb[0])*(a.fb[3]-a.fb[1])).slice(0,6)) : new Set();
-  for(const d of pos){
-    const bw=d.fb[2]-d.fb[0], bh=d.fb[3]-d.fb[1];
-    if(refine.has(d) && Math.max(bw,bh) < 0.8*Math.max(W,H)){
-      const m=0.18, rx=Math.max(0,Math.floor(d.fb[0]-bw*m)), ry=Math.max(0,Math.floor(d.fb[1]-bh*m));
-      const rw=Math.min(W,Math.ceil(d.fb[2]+bw*m))-rx, rh=Math.min(H,Math.ceil(d.fb[3]+bh*m))-ry;
-      const lb=letterbox(cv.fc, rx, ry, rw, rh);
-      const RR=await infer(lb, nT, 0.05);
-      let best=null, bi=0.3; for(const e of RR.dets){ if(e.k!==d.k) continue; const v=iou(e.fb,d.fb); if(v>bi){ bi=v; best=e; } }
-      if(best){ detMaskTo(cv.px, best, RR.proto, RR.lb, W, H); continue; }
-    }
-    detMaskTo(cv.px, d, R.proto, R.lb, W, H);
-  }
-  for(const d of neg) detMaskTo(cv.nx, d, R.proto, R.lb, W, H);
-  // segurar o último resultado se o alvo sumir por poucos frames
-  if(!pos.length && memo.last && memo.age < P.hold){ memo.age++; return {q:memo.last.slice(), dets:R.dets, held:true}; }
-  const pd=cv.px.getImageData(0,0,W,H).data, nd=neg.length? cv.nx.getImageData(0,0,W,H).data : null;
-  const q=new Float32Array(W*H);
-  for(let i=0,j=0;i<W*H;i++,j+=4){ q[i]=((pd[j]>=128)&&!(nd&&nd[j]>=128))?1:0; } // binário no limiar 0.5; a borda suave vem do refino guiado pela imagem
-  if(P.edge>0 && pos.length){
-    const fd=cv.fx.getImageData(0,0,W,H).data, I=new Float32Array(W*H);
-    for(let i=0,j=0;i<W*H;i++,j+=4) I[i]=(0.299*fd[j]+0.587*fd[j+1]+0.114*fd[j+2])/255;
-    const r=Math.max(1,Math.round(P.edge*Math.max(W,H)/1920));
-    guided(I, q, W, H, r, 2e-4);
-  }
-  memo.last=q; memo.age=0;
-  return {q, dets:R.dets};
-}
-
-/* ---------------- PNG 8-bit cinza (nativo) ---------------- */
+/* ================= PNG 8-bit cinza ================= */
 const CRC=(()=>{const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xedb88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t;})();
 function crc32(b){ let c=0xffffffff; for(let i=0;i<b.length;i++) c=CRC[(c^b[i])&255]^(c>>>8); return (c^0xffffffff)>>>0; }
 async function zlib(data){ const cs=new CompressionStream("deflate"); const w=cs.writable.getWriter(); w.write(data); w.close(); return new Uint8Array(await new Response(cs.readable).arrayBuffer()); }
@@ -513,277 +578,291 @@ async function pngGray(px, W, H){
   const raw=new Uint8Array((W+1)*H); for(let y=0;y<H;y++){ raw[y*(W+1)]=0; raw.set(px.subarray(y*W,(y+1)*W), y*(W+1)+1); }
   const idat=await zlib(raw);
   const chunk=(type,data)=>{ const out=new Uint8Array(12+data.length), dv=new DataView(out.buffer); dv.setUint32(0,data.length); for(let i=0;i<4;i++) out[4+i]=type.charCodeAt(i); out.set(data,8); dv.setUint32(8+data.length, crc32(out.subarray(4,8+data.length))); return out; };
-  const ih=new Uint8Array(13), dv=new DataView(ih.buffer); dv.setUint32(0,W); dv.setUint32(4,H); ih[8]=8; ih[9]=0; ih[10]=0; ih[11]=0; ih[12]=0;
-  const parts=[new Uint8Array([137,80,78,71,13,10,26,10]), chunk("IHDR",ih), chunk("IDAT",idat), chunk("IEND",new Uint8Array(0))];
-  return new Blob(parts,{type:"image/png"});
+  const ih=new Uint8Array(13), dv=new DataView(ih.buffer); dv.setUint32(0,W); dv.setUint32(4,H); ih[8]=8;
+  return new Blob([new Uint8Array([137,80,78,71,13,10,26,10]), chunk("IHDR",ih), chunk("IDAT",idat), chunk("IEND",new Uint8Array(0))],{type:"image/png"});
 }
+async function pngToGray(blob, W, H, ctx){ const bm=await createImageBitmap(blob); ctx.clearRect(0,0,W,H); ctx.drawImage(bm,0,0); bm.close();
+  const d=ctx.getImageData(0,0,W,H).data, q=new Float32Array(W*H); for(let i=0,j=0;i<q.length;i++,j+=4) q[i]=d[j]/255; return q; }
 
-/* ---------------- monitor ---------------- */
-const view=$("#view"), vctx=view.getContext("2d");
-const vid=$("#vid");
+/* ================= monitor ================= */
+const view=$("#view"), vctx=view.getContext("2d"), vid=$("#vid");
 let srcURL=null;
-function fitView(W,H){ view.width=W>H? Math.min(1280,W): Math.round(Math.min(1280,H)*W/H); view.height=Math.round(view.width*H/W); $("#screen").style.aspectRatio=`${W}/${H}`; }
-function frameIndexAt(t){ const v=st.video; if(!v) return 0; const ts=v._pts; let lo=0,hi=ts.length-1; while(lo<hi){ const m=(lo+hi+1)>>1; if(ts[m]<=t+1e-4) lo=m; else hi=m-1; } return lo; }
+function fitView(W,H){ view.width=W>H?Math.min(1280,W):Math.round(Math.min(1280,H)*W/H); view.height=Math.round(view.width*H/W); $("#screen").style.aspectRatio=`${W}/${H}`; }
+function curFrame(){ const v=st.video; if(!v) return 0; const t=Math.round(((vid.currentTime||0))*1e6)+v.ts[0]; let lo=0,hi=v.ts.length-1; while(lo<hi){ const m=(lo+hi+1)>>1; if(v.ts[m]<=t+100) lo=m; else hi=m-1; } return lo; }
+function objColor(o, a){ return o.sign<0? `rgba(80,150,255,${a})` : o.active? `rgba(255,70,70,${a})` : `rgba(200,200,200,${a*0.6})`; }
+function makeOverlay(o, sc){ if(!o.mask) { o.ov=null; return; } const R=o.mask.rect, w=Math.max(1,Math.round(R.w*sc)), h=Math.max(1,Math.round(R.h*sc));
+  const c=new OffscreenCanvas(w,h), x=c.getContext("2d"), id=x.createImageData(w,h), col=o.sign<0?[80,150,255]:o.active?[255,70,70]:[200,200,200];
+  for(let y=0;y<h;y++){ const sy=Math.min(R.h-1,Math.floor((y+0.5)/sc)); for(let xx=0;xx<w;xx++){ const sx=Math.min(R.w-1,Math.floor((xx+0.5)/sc)); const v=o.mask.data[sy*R.w+sx]; const j=(y*w+xx)*4; id.data[j]=col[0]; id.data[j+1]=col[1]; id.data[j+2]=col[2]; id.data[j+3]=v*(o.active||o.sign<0?150:70); } }
+  x.putImageData(id,0,0); o.ov={c, rect:R}; }
 function drawCurrent(){
-  const v=st.video; if(!v) return;
-  const W=view.width, H=view.height;
-  vctx.globalCompositeOperation="source-over";
+  const v=st.video; if(!v) return; const W=view.width, H=view.height;
   if(vid.readyState>=2) vctx.drawImage(vid,0,0,W,H); else { vctx.fillStyle="#000"; vctx.fillRect(0,0,W,H); }
-  const fi = frameIndexAt(vid.currentTime + (v._pts[0]||0));
-  $("#scrub").value=fi; $("#tc").textContent=`frame ${fi} / ${v.nFrames-1}  ·  ${(vid.currentTime||0).toFixed(3)} s`;
-  const R=st.results;
-  if(R && R.thumbs[fi] && st.view!=="orig"){
+  const fi=curFrame(); $("#scrub").value=fi; $("#tc").textContent=`frame ${fi} / ${v.nFrames-1}  ·  ${(vid.currentTime||0).toFixed(3)} s`;
+  const R=st.results, ref=st.ref;
+  if(ref && fi===ref.fi && st.view!=="orig" && !(R && st.view==="mask")){
+    const sx=W/ref.W, sy=H/ref.H;
+    if(st.view==="mask"){ vctx.fillStyle="#000"; vctx.fillRect(0,0,W,H); }
+    for(const o of ref.objs){ if(o.ov) vctx.drawImage(o.ov.c, o.ov.rect.x*sx, o.ov.rect.y*sy, o.ov.rect.w*sx, o.ov.rect.h*sy); }
+    vctx.font="600 12px "+getComputedStyle(document.body).getPropertyValue("--mono"); vctx.lineWidth=1.5;
+    ref.objs.forEach(o=>{ const b=o.mb||o.box; vctx.strokeStyle=o.sign<0?"#5096ff":o.active?"#ffb547":"rgba(255,255,255,.5)"; vctx.setLineDash(o.k<0?[5,4]:[]);
+      vctx.strokeRect(b[0]*sx,b[1]*sy,(b[2]-b[0])*sx,(b[3]-b[1])*sy); vctx.setLineDash([]);
+      const lab=`#${o.id} ${o.label}`; const tw=vctx.measureText(lab).width+8; vctx.fillStyle="rgba(0,0,0,.65)"; vctx.fillRect(b[0]*sx,Math.max(0,b[1]*sy-17),tw,17); vctx.fillStyle=vctx.strokeStyle; vctx.fillText(lab,b[0]*sx+4,Math.max(12,b[1]*sy-5));
+      for(const p of (o.pins.length?pinsFor(o):[])){ vctx.beginPath(); vctx.arc(p.x*sx,p.y*sy,6,0,7); vctx.fillStyle=p.l===1?"#33d17a":"#ff3b3b"; vctx.fill(); vctx.lineWidth=2; vctx.strokeStyle="#fff"; vctx.stroke(); } });
+    if(drag){ vctx.strokeStyle="#33d17a"; vctx.setLineDash([6,4]); vctx.strokeRect(drag.x0*sx,drag.y0*sy,(drag.x1-drag.x0)*sx,(drag.y1-drag.y0)*sy); vctx.setLineDash([]); }
+  } else if(R && R.thumbs[fi] && st.view!=="orig"){
     const tw=R.tw, th=R.th, img=new ImageData(tw,th), d=img.data, m=R.thumbs[fi];
     for(let i=0,j=0;i<m.length;i++,j+=4){ if(st.view==="mask"){ d[j]=d[j+1]=d[j+2]=m[i]; d[j+3]=255; } else { d[j]=255; d[j+1]=60; d[j+2]=60; d[j+3]=m[i]*0.55; } }
-    const tc=new OffscreenCanvas(tw,th); tc.getContext("2d").putImageData(img,0,0);
-    if(st.view==="mask"){ vctx.drawImage(tc,0,0,W,H); } else { vctx.drawImage(tc,0,0,W,H); }
-  } else if(st.test && st.view!=="orig"){
-    const T=st.test; vctx.drawImage(T.overlay,0,0,W,H);
-    const sx=W/T.W, sy=H/T.H; vctx.lineWidth=2; vctx.font="600 13px "+getComputedStyle(document.body).getPropertyValue("--mono");
-    T.dets.forEach((d,i)=>{ const on = st.sel==="all" || T.picked.has(i); const neg=T.terms[d.k].sign<0;
-      vctx.strokeStyle = neg? "#ff4d4d" : on? "#ffb547" : "rgba(255,255,255,.45)";
-      vctx.strokeRect(d.fb[0]*sx, d.fb[1]*sy, (d.fb[2]-d.fb[0])*sx, (d.fb[3]-d.fb[1])*sy);
-      const lab=`#${i+1} ${T.terms[d.k].label} ${d.conf.toFixed(2)}`; vctx.fillStyle="rgba(0,0,0,.65)"; const tw=vctx.measureText(lab).width+8;
-      vctx.fillRect(d.fb[0]*sx, Math.max(0,d.fb[1]*sy-18), tw, 18); vctx.fillStyle=vctx.strokeStyle; vctx.fillText(lab, d.fb[0]*sx+4, Math.max(13,d.fb[1]*sy-5)); });
+    const tc=new OffscreenCanvas(tw,th); tc.getContext("2d").putImageData(img,0,0); vctx.drawImage(tc,0,0,W,H);
   }
 }
-vid.addEventListener("seeked", drawCurrent); vid.addEventListener("loadeddata", drawCurrent);
+vid.addEventListener("seeked",drawCurrent); vid.addEventListener("loadeddata",drawCurrent);
 let raf=0; function loop(){ drawCurrent(); if(!vid.paused) raf=requestAnimationFrame(loop); }
-vid.addEventListener("play", ()=>{ $("#playBtn").textContent="❚❚"; loop(); });
-vid.addEventListener("pause", ()=>{ $("#playBtn").textContent="▶"; cancelAnimationFrame(raf); drawCurrent(); });
+vid.addEventListener("play",()=>{ $("#playBtn").textContent="❚❚"; loop(); });
+vid.addEventListener("pause",()=>{ $("#playBtn").textContent="▶"; cancelAnimationFrame(raf); drawCurrent(); });
 $("#playBtn").onclick=()=>{ if(!st.video) return; vid.paused? vid.play().catch(()=>{}) : vid.pause(); };
 vid.loop=true;
-$("#scrub").addEventListener("input", e=>{ const v=st.video; if(!v) return; vid.pause(); vid.currentTime = v._pts[+e.target.value]-v._pts[0] + 1e-3; });
-document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{ st.view=b.dataset.v; document.querySelectorAll("[data-v]").forEach(x=>x.setAttribute("aria-pressed", x===b)); drawCurrent(); });
-document.querySelectorAll("[data-sel]").forEach(b=>b.onclick=()=>{ st.sel=b.dataset.sel; document.querySelectorAll("[data-sel]").forEach(x=>x.setAttribute("aria-pressed", x===b)); renderObjs(); drawCurrent(); });
-document.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>{ st.quality=b.dataset.q; document.querySelectorAll("[data-q]").forEach(x=>x.setAttribute("aria-pressed", x===b)); });
-for(const id of ["conf","edge","grow","feather","smooth","hold"]){ const el=$("#"+id), out=el.nextElementSibling; const fmt=()=>{ out.textContent = id==="conf"? (+el.value).toFixed(2) : id==="grow"? (el.value>0?"+":"")+el.value+" px" : id==="smooth"||id==="hold"? el.value : el.value+" px"; }; el.addEventListener("input",fmt); fmt(); el.addEventListener("dblclick",()=>{ el.value=el.defaultValue; fmt(); }); }
+function seekFrame(i){ const v=st.video; vid.pause(); vid.currentTime=(v.ts[i]-v.ts[0])/1e6+1e-3; }
+$("#scrub").addEventListener("input",e=>{ if(st.video) seekFrame(+e.target.value); });
+const press=(sel,attr,val)=>document.querySelectorAll(sel).forEach(x=>x.setAttribute("aria-pressed", x.dataset[attr]===val));
+document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{ st.view=b.dataset.v; press("[data-v]","v",st.view); drawCurrent(); });
+document.querySelectorAll("[data-sel]").forEach(b=>b.onclick=()=>{ st.sel=b.dataset.sel; press("[data-sel]","sel",st.sel); });
+const HINTS={select:"Clique num objeto para ligar ou desligar.", plus:"Clique no que deve ENTRAR na máscara. Fora de qualquer objeto, cria um objeto novo.", minus:"Clique no que deve SAIR da máscara.", box:"Arraste uma caixa em volta do objeto. Com Shift, a caixa vira algo a tirar."};
+document.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>{ st.tool=b.dataset.tool; press("[data-tool]","tool",st.tool); $("#toolHint").textContent=HINTS[st.tool]; view.style.cursor=st.tool==="select"?"pointer":"crosshair"; });
+for(const id of ["conf","edge","grow","feather","smooth","hold"]){ const el=$("#"+id), out=el.nextElementSibling;
+  const fmt=()=>{ out.textContent= id==="conf"?(+el.value).toFixed(2) : id==="grow"?(el.value>0?"+":"")+el.value+" px" : id==="smooth"?el.value : id==="hold"?el.value+" fr" : id==="edge"?(+el.value?el.value+" px":"off") : el.value+" px"; };
+  el.addEventListener("input",fmt); fmt(); el.addEventListener("dblclick",()=>{ el.value=el.defaultValue; fmt(); }); }
 
-/* ---------------- carregar vídeo ---------------- */
+/* ================= carregar vídeo ================= */
 async function useFile(file){
   try{
     setStatus("Lendo o vídeo…"); $("#viewMsg").textContent="Lendo o vídeo…"; $("#viewMsg").hidden=false;
-    const v=await openVideo(file);
-    v._pts = v.samples.map(s=>s.cts/s.timescale).sort((a,b)=>a-b);
-    st.video=v; st.results=null; st.test=null; st.zipBlob=null; $("#saveBtn").disabled=true; $("#checks").textContent="";
+    const v=await openVideo(file); st.video=v; st.ref=null; st.raw=null; st.results=null; st.zipBlob=null;
+    $("#saveBtn").disabled=true; $("#finishBtn").disabled=true; $("#checks").textContent="";
     if(srcURL) URL.revokeObjectURL(srcURL); srcURL=URL.createObjectURL(file); vid.src=srcURL;
-    fitView(v.W,v.H);
-    $("#fileName").textContent=file.name;
-    $("#scrub").max=v.nFrames-1;
-    const meta=[["Resolução",`${v.W}×${v.H}`],["Frames",v.nFrames],["FPS",v.fps.toFixed(3)],["Duração",v.dur.toFixed(2)+" s"],["Codec",v.codec.split(".")[0]],["Rotação",v.rot+"°"]];
-    const box=$("#meta"); box.textContent=""; for(const [k,val] of meta){ const d=document.createElement("div"); const s=document.createElement("span"); s.textContent=k; d.append(s, document.createTextNode(String(val))); box.append(d); }
-    $("#viewMsg").hidden=true; setStatus(`Pronto: ${v.nFrames} frames. Estimativa: ${estimate()}.`);
-    renderObjs();
+    fitView(v.W,v.H); $("#fileName").textContent=file.name; $("#scrub").max=v.nFrames-1;
+    const box=$("#meta"); box.textContent="";
+    for(const [k,val] of [["Resolução",`${v.W}×${v.H}`],["Frames",v.nFrames],["FPS",v.fps.toFixed(3)],["Duração",v.dur.toFixed(2)+" s"],["Codec",v.codec.split(".")[0]],["Rotação",v.rot+"°"]]){ const d=document.createElement("div"), s=document.createElement("span"); s.textContent=k; d.append(s,document.createTextNode(String(val))); box.append(d); }
+    $("#viewMsg").hidden=true; renderObjs(); setStatus(`Pronto: ${v.nFrames} frames. Escolha um frame bom e clique em “Analisar este frame”.`);
   }catch(e){ setStatus(e.message); $("#viewMsg").textContent=e.message; console.error(e); }
 }
-function estimate(){ const v=st.video; if(!v) return "–"; const per = (st.engine==="webgpu"?0.15:1.2) * (st.quality==="high"?2.5:1) * Math.max(1,(v.W*v.H)/(1920*1080)*0.6+0.4); return "~"+fmtTime(per*v.nFrames)+(st.engine?"":" (depende do motor)"); }
 $("#pickBtn").onclick=()=>$("#file").click();
 $("#file").onchange=e=>{ const f=e.target.files[0]; if(f) useFile(f); };
 const scr=$("#screen");
-scr.addEventListener("dragover",e=>{ e.preventDefault(); $("#dropHint").hidden=false; });
+scr.addEventListener("dragover",e=>{ if(e.dataTransfer.types.includes("Files")){ e.preventDefault(); $("#dropHint").hidden=false; } });
 scr.addEventListener("dragleave",()=>{ $("#dropHint").hidden=true; });
 scr.addEventListener("drop",e=>{ e.preventDefault(); $("#dropHint").hidden=true; const f=e.dataTransfer.files[0]; if(f) useFile(f); });
 
-/* ---------------- testar no frame atual ---------------- */
-async function grabCurrentFrame(){
-  // frame exato via WebCodecs (o mesmo que o processamento vai ver)
-  const v=st.video, fi=+$("#scrub").value;
-  const cv=makeCanvases(v.W,v.H);
-  let got=false, n=0;
-  for await (const f of decodeAll(v)){
-    const t=f.timestamp/1e6;
-    if(Math.abs(t - v._pts[fi])<5e-4){ drawFrame(f, cv.fx, v.W, v.H, v.rot); f.close(); got=true; break; }
-    f.close(); if(++n>v.nFrames) break;
-  }
-  if(!got) throw new Error("Não consegui ler esse frame.");
-  return {cv, fi};
+/* ================= frame de referência ================= */
+function readParams(){ return { conf:+$("#conf").value, edge:+$("#edge").value, hold:+$("#hold").value, islands:$("#islands").checked, holes:$("#holes").checked,
+  grow:+$("#grow").value, feather:+$("#feather").value, smooth:+$("#smooth").value, hard:$("#hard").checked, invert:$("#invert").checked }; }
+function makeCanvases(W,H){ const fc=new OffscreenCanvas(W,H); return {fc, fx:fc.getContext("2d",{willReadFrequently:true})}; }
+async function grabFrame(fi){
+  const v=st.video, cv=makeCanvases(v.W,v.H);
+  for await (const f of decodeAll(v)){ const i=frameIdx(v,f.timestamp); if(i===fi){ drawFrame(f,cv.fx,v.W,v.H,v.rot); f.close(); return cv; } f.close(); if(i>fi) break; }
+  throw new Error("Não consegui ler esse frame.");
 }
-$("#testBtn").onclick=async()=>{
-  if(!st.video) return;
-  const terms=renderTerms();
-  try{
-    await loadEngine();
-    const ts=renderTerms(); if(ts.some(t=>t.idx<0)){ setStatus("Há termos que o modelo não conhece (em vermelho). Escolha uma sugestão."); return; }
-    if(!ts.some(t=>t.sign>0)){ setStatus("Coloque pelo menos um alvo sem “-”."); return; }
-    if(ts.length>NSLOT){ setStatus(`Use no máximo ${NSLOT} termos.`); return; }
-    st._tpe=buildTpe(ts);
-    vid.pause(); setStatus("Lendo o frame e procurando…");
-    const {cv, fi}=await grabCurrentFrame();
-    const P=readParams(); const v=st.video;
-    const memo={};
-    const t0=performance.now();
-    const res=await maskForFrame(cv, v.W, v.H, ts, P, null, memo);
-    const ms=performance.now()-t0;
-    const m=finish(res.q, v.W, v.H, {...P, invert:false});
-    // overlay
-    const ov=new OffscreenCanvas(v.W,v.H), ox=ov.getContext("2d"), id=ox.createImageData(v.W,v.H);
-    for(let i=0,j=0;i<m.length;i++,j+=4){ id.data[j]=255; id.data[j+1]=60; id.data[j+2]=60; id.data[j+3]=m[i]*0.55; }
-    ox.putImageData(id,0,0);
-    const dets=res.dets.filter(d=>d.conf>=P.conf);
-    st.test={frameIdx:fi, dets, picked:new Set(dets.map((d,i)=>ts[d.k].sign>0?i:-1).filter(i=>i>=0)), terms:ts, W:v.W, H:v.H, overlay:ov, mask:m};
-    st.results=null;
-    renderObjs(); drawCurrent();
-    setStatus(`${dets.length} objeto(s) no frame ${fi} · ${ms.toFixed(0)} ms neste frame · estimativa total ${estimate()}`);
-  }catch(e){ setStatus(e.message); console.error(e); }
-};
-function renderObjs(){
-  const box=$("#objs"); const T=st.test;
-  if(!T){ return; }
-  box.textContent="";
-  if(!T.dets.length){ const p=document.createElement("p"); p.className="hint"; p.textContent="Nada encontrado neste frame. Baixe a confiança ou troque o termo."; box.append(p); return; }
-  T.dets.forEach((d,i)=>{
-    const row=document.createElement("label"); row.className="obj";
-    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked = st.sel==="all" || T.picked.has(i); cb.disabled = st.sel==="all" || T.terms[d.k].sign<0;
-    cb.onchange=()=>{ cb.checked? T.picked.add(i) : T.picked.delete(i); drawCurrent(); };
-    const n=document.createElement("span"); n.className="n"; n.textContent="#"+(i+1);
-    const l=document.createElement("span"); l.textContent=(T.terms[d.k].sign<0?"− ":"")+T.terms[d.k].label;
-    const c=document.createElement("span"); c.className="c"; c.textContent=d.conf.toFixed(2);
-    row.append(cb,n,l,c); box.append(row);
-  });
+function checkTerms(){ const ts=renderTerms(); if(ts.some(t=>t.idx<0)) throw new Error("Há termos que o modelo não conhece (em vermelho). Escolha uma sugestão.");
+  if(ts.length>NSLOT) throw new Error(`Use no máximo ${NSLOT} termos.`); if(ts.length) st._tpe=buildTpe(ts); return ts; }
+async function analyze(){
+  const v=st.video; if(!v) return;
+  await loadEngine(); const terms=checkTerms(); const P=readParams();
+  vid.pause(); const fi=curFrame(); setStatus("Lendo o frame…");
+  const cv=await grabFrame(fi);
+  const t0=performance.now(); const objs=[];
+  if(terms.length){ setStatus("Procurando pelo texto…"); const dets=await detect(cv,v.W,v.H,terms,P.conf);
+    for(const d of dets) objs.push({id:st.nextId++, k:d.k, sign:terms[d.k].sign, label:terms[d.k].label, active:true, box:d.b.slice(), pins:[], prev:null, mb:null, miss:0, conf:d.conf}); }
+  // pins e caixas manuais de uma análise anterior no mesmo frame são mantidos
+  if(st.ref && st.ref.fi===fi) for(const o of st.ref.objs) if(o.k<0) objs.push({...o, prev:null, mask:null});
+  st.ref={fi, cv, W:v.W, H:v.H, objs, terms, history:[]};
+  await resegAll(); renderObjs(); drawCurrent();
+  setStatus(`${objs.length} objeto(s) no frame ${fi} · ${((performance.now()-t0)/1000).toFixed(1)} s. Corrija com os pins se precisar, depois “Gerar máscaras”.`);
 }
-view.addEventListener("click", e=>{
-  const T=st.test; if(!T || st.sel!=="pick") return;
-  const r=view.getBoundingClientRect(), x=(e.clientX-r.left)/r.width*T.W, y=(e.clientY-r.top)/r.height*T.H;
-  let hit=-1, area=Infinity;
-  T.dets.forEach((d,i)=>{ if(T.terms[d.k].sign<0) return; if(x>=d.fb[0]&&x<=d.fb[2]&&y>=d.fb[1]&&y<=d.fb[3]){ const a=(d.fb[2]-d.fb[0])*(d.fb[3]-d.fb[1]); if(a<area){ area=a; hit=i; } } });
-  if(hit>=0){ T.picked.has(hit)? T.picked.delete(hit) : T.picked.add(hit); renderObjs(); drawCurrent(); }
-});
+async function resegAll(){ const ref=st.ref, P=readParams(); const sc=view.width/ref.W; let n=0;
+  const shared = ref.objs.length>4 ? await samEncode(ref.cv,{x:0,y:0,w:ref.W,h:ref.H}) : null;
+  for(const o of ref.objs){ o.prev=null; setStatus(`Recortando ${++n}/${ref.objs.length}…`); await segmentObject(ref.cv, ref.W, ref.H, o, P, shared); await segmentObject(ref.cv, ref.W, ref.H, o, P, shared); makeOverlay(o, sc); } }
+async function reseg(o){ const ref=st.ref; o.prev=null; await segmentObject(ref.cv, ref.W, ref.H, o, readParams(), null);
+  // segunda passada com a própria máscara como guia: borda mais estável
+  await segmentObject(ref.cv, ref.W, ref.H, o, readParams(), null); makeOverlay(o, view.width/ref.W); drawCurrent(); }
+$("#cutter").addEventListener("change", ()=>guarded(async()=>{ if(!engineLoading) return; await engineLoading; await loadCutter(); if(st.ref){ await resegAll(); renderObjs(); drawCurrent(); setStatus("Recortador trocado. Objetos recortados de novo."); } }));
+$("#testBtn").onclick=async()=>{ if(st.running) return; try{ await analyze(); }catch(e){ setStatus(e.message); console.error(e); } };
 
-/* ---------------- gerar ---------------- */
-$("#stopBtn").onclick=()=>{ st.stop=true; setStatus("Parando…"); };
-$("#runBtn").onclick=async()=>{
-  if(!st.video || st.running) return;
-  const v=st.video, P=readParams();
-  try{
-    await loadEngine();
-    const terms=renderTerms();
-    if(terms.some(t=>t.idx<0)){ setStatus("Há termos que o modelo não conhece (em vermelho). Escolha uma sugestão."); return; }
-    if(!terms.some(t=>t.sign>0)){ setStatus("Coloque pelo menos um alvo sem “-”."); return; }
-    if(terms.length>NSLOT){ setStatus(`Use no máximo ${NSLOT} termos.`); return; }
-    st._tpe=buildTpe(terms);
-    let chosenSeed=null;
-    if(st.sel==="pick"){
-      const T=st.test;
-      if(!T || !T.picked.size){ setStatus("No modo “Só os marcados”, teste um frame e clique nos objetos que quer."); return; }
-      chosenSeed={frame:T.frameIdx, boxes:[...T.picked].map(i=>({b:T.dets[i].fb.slice(), k:T.dets[i].k}))};
-    }
-    st.running=true; st.stop=false; $("#runBtn").disabled=true; $("#stopBtn").disabled=false; $("#saveBtn").disabled=true; $("#checks").textContent="";
-    vid.pause();
-    const W=v.W, H=v.H, cv=makeCanvases(W,H);
-    // objetos marcados: 1ª passada leve para achar a posição deles no frame 0 (segue para trás a partir do frame marcado)
-    let chosen=null;
-    if(chosenSeed){
-      chosen = await backtrack(chosenSeed, terms, P);
-      if(st.stop) throw new Error("Parado.");
-    }
-    // saídas
-    const zip=new JSZip(), name=base(v.name);
-    const pngDir = P && $("#outPng").checked ? zip.folder(`${name}_mascara_png`) : null;
-    let muxer=null, enc=null, chunks=0, encErr=null;
-    const mc=new OffscreenCanvas(W,H), mx=mc.getContext("2d"), mimg=mx.createImageData(W,H);
-    if($("#outMp4").checked){
-      const br = Math.min(40e6, Math.max(6e6, W*H*v.fps*0.12));
-      const tryCodecs=["avc1.640034","avc1.640033","avc1.640028","avc1.4d0028"];
-      let cfg=null; for(const c of tryCodecs){ const t={codec:c, width:W, height:H, bitrate:br, framerate:v.fps, avc:{format:"avc"}, latencyMode:"quality"}; const s=await VideoEncoder.isConfigSupported(t).catch(()=>({supported:false})); if(s.supported){ cfg=t; break; } }
-      if(!cfg) throw new Error(`O navegador não codifica H.264 em ${W}×${H}. Desmarque o MP4 e use a sequência PNG.`);
-      muxer=new Mp4Muxer.Muxer({target:new Mp4Muxer.ArrayBufferTarget(), video:{codec:"avc", width:W, height:H, frameRate:Math.round(v.fps)}, fastStart:"in-memory", firstTimestampBehavior:"offset"});
-      enc=new VideoEncoder({output:(c,m)=>{ muxer.addVideoChunk(c,m); chunks++; }, error:e=>{ encErr=e; }});
-      enc.configure(cfg);
-    }
-    const tw=Math.min(480,W), th=Math.round(tw*H/W);
-    st.results={thumbs:new Array(v.nFrames), tw, th};
-    const thumbC=new OffscreenCanvas(tw,th), thumbX=thumbC.getContext("2d",{willReadFrequently:true});
-    const outTs=[], memo={}, buf=new Map(); let emitted=0, nextEmit=0; const t0=performance.now(); const coverage=[];
-    const emit = async (item)=>{
-      const m=finish(item.q, W, H, P);
-      for(let i=0,j=0;i<m.length;i++,j+=4){ mimg.data[j]=mimg.data[j+1]=mimg.data[j+2]=m[i]; mimg.data[j+3]=255; }
-      mx.putImageData(mimg,0,0);
-      if(enc){ while(enc.encodeQueueSize>4) await sleep(5); if(encErr) throw encErr;
-        const vf=new VideoFrame(mc,{timestamp:item.ts, duration:item.dur}); enc.encode(vf,{keyFrame: emitted % Math.max(1,Math.round(v.fps)) === 0}); vf.close(); }
-      if(pngDir) pngDir.file(`${name}_mascara_${String(emitted).padStart(5,"0")}.png`, await pngGray(m,W,H));
-      thumbX.drawImage(mc,0,0,tw,th); const td=thumbX.getImageData(0,0,tw,th).data, tm=new Uint8Array(tw*th); for(let i=0,j=0;i<tm.length;i++,j+=4) tm[i]=td[j];
-      st.results.thumbs[emitted]=tm; let s=0; for(let i=0;i<m.length;i+=97) s+=m[i]; coverage.push(+(s/ (m.length/97) /255).toFixed(4));
-      outTs.push(item.ts); emitted++; nextEmit++;
-    };
-    const srcTs=v.samples.map(s=>Math.round(1e6*s.cts/s.timescale)).sort((a,b)=>a-b);
-    const durAt=i=> i+1<srcTs.length? srcTs[i+1]-srcTs[i] : Math.round(1e6/v.fps);
-    let fi=0, expIdx=0, filled=0, lastQ=null, decoded=0;
-    const addItem=async(it)=>{ buf.set(fi,it); fi++;
-      while(nextEmit <= fi-1 - P.smooth){ await emit(avgWindow(buf, nextEmit, P.smooth)); for(const k of [...buf.keys()]) if(k < nextEmit - P.smooth) buf.delete(k); } };
-    for await (const f of decodeAll(v)){
-      if(st.stop){ f.close(); break; }
-      drawFrame(f, cv.fx, W, H, v.rot); const ts=f.timestamp; f.close(); decoded++;
-      const ch = chosen ? chosen.map(c=>({...c, b:(c.byFrame&&c.byFrame[Math.min(expIdx,c.byFrame.length-1)])||c.b})) : null;
-      const res = await maskForFrame(cv, W, H, terms, P, ch, memo);
-      // frame que o decodificador não entregou: repete a máscara vizinha no tempo exato dele (mantém a contagem)
-      while(expIdx < srcTs.length && srcTs[expIdx] < ts-1){ await addItem({q:lastQ||res.q, ts:srcTs[expIdx], dur:durAt(expIdx)}); filled++; expIdx++; }
-      await addItem({q:res.q, ts, dur:durAt(expIdx)}); if(expIdx<srcTs.length && Math.abs(srcTs[expIdx]-ts)<=1) expIdx++;
-      lastQ=res.q;
-      const el=(performance.now()-t0)/1000, per=el/decoded;
-      setBar(expIdx/v.nFrames); setStatus(`Frame ${expIdx}/${v.nFrames} · ${per.toFixed(2)} s/frame · faltam ~${fmtTime(per*(v.nFrames-expIdx))}`);
-      if(decoded%3===0){ vid.currentTime=Math.max(0,v._pts[Math.max(0,emitted-1)]-v._pts[0]+1e-3); }
-    }
-    if(!st.stop) while(expIdx < srcTs.length && lastQ){ await addItem({q:lastQ, ts:srcTs[expIdx], dur:durAt(expIdx)}); filled++; expIdx++; }
-    while(buf.has(nextEmit)) await emit(avgWindow(buf, nextEmit, P.smooth));
-    if(enc){ await enc.flush(); enc.close(); if(encErr) throw encErr; muxer.finalize(); zip.file(`${name}_mascara.mp4`, muxer.target.buffer); }
-    const same = outTs.length===srcTs.length && outTs.every((t,i)=>Math.abs(t-srcTs[i])<=1);
-    const report={video:v.name, largura:W, altura:H, frames_original:v.nFrames, frames_mascara:emitted, fps:+v.fps.toFixed(4),
-      tempos_identicos:same, frames_repetidos_por_falha_do_decodificador:filled, chunks_mp4:enc?chunks:null, prompt:$("#prompt").value, termos:terms.map(t=>({rotulo:t.label, modelo:t.en, subtrai:t.sign<0})),
-      objetos: st.sel==="pick"? "marcados" : "todos", parametros:P, motor:st.engine, cobertura_por_frame:coverage, tempo_s:+((performance.now()-t0)/1000).toFixed(1)};
-    zip.file(`${name}_relatorio.json`, JSON.stringify(report,null,1));
-    setStatus("Montando o ZIP…");
-    st.zipBlob=await zip.generateAsync({type:"blob", compression:"STORE"}); st.zipName=`${name}_mascaras.zip`;
-    const ok = emitted===v.nFrames && same && (!enc || chunks===emitted);
-    const ck=$("#checks"); ck.textContent="";
-    for(const [y,t] of [[emitted===v.nFrames, `${emitted} de ${v.nFrames} frames`],[same,"mesmos tempos de frame do original"],[true,`mesma resolução ${W}×${H}`],[!enc||chunks===emitted, enc?`MP4 com ${chunks} frames`:"MP4 desligado"]].concat(filled?[[true,`${filled} frame(s) que o navegador não decodificou receberam a máscara do vizinho`]]:[])){ const d=document.createElement("div"); d.className=y?"y":"n"; d.textContent=t; ck.append(d); }
-    setBar(1); setStatus(st.stop? `Parado no frame ${emitted}. O ZIP tem só o que foi feito.` : `Pronto em ${fmtTime(report.tempo_s)}. ${ok?"Tudo bate com o original.":"Confira os itens em vermelho."}`);
-    $("#saveBtn").disabled=false; st.test=null; vid.currentTime=0; drawCurrent();
-  }catch(e){ setStatus(e.message); console.error(e); }
-  finally{ st.running=false; $("#runBtn").disabled=false; $("#stopBtn").disabled=true; }
-};
-function avgWindow(buf, c, N){
-  if(N===0) return buf.get(c);
-  const ks=[]; for(let k=c-N;k<=c+N;k++) if(buf.has(k)) ks.push(k);
-  const L=buf.get(c).q.length, q=new Float32Array(L);
-  for(const k of ks){ const s=buf.get(k).q; for(let i=0;i<L;i++) q[i]+=s[i]; }
-  for(let i=0;i<L;i++) q[i]/=ks.length; return {q, ts:buf.get(c).ts, dur:buf.get(c).dur};
+function renderObjs(){
+  const box=$("#objs"), ref=st.ref; if(!ref) return; box.textContent="";
+  if(!ref.objs.length){ const p=document.createElement("p"); p.className="hint"; p.textContent="Nada encontrado. Baixe a confiança, troque o termo, ou marque com Pin + / Caixa."; box.append(p); return; }
+  for(const o of ref.objs){
+    const row=document.createElement("label"); row.className="obj";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=o.active; cb.onchange=()=>{ o.active=cb.checked; makeOverlay(o, view.width/ref.W); drawCurrent(); };
+    const n=document.createElement("span"); n.className="n"; n.textContent="#"+o.id;
+    const l=document.createElement("span"); l.textContent=(o.sign<0?"− ":"")+o.label+(o.pins.length?`  · ${o.pins.length} pin(s)`:"");
+    const c=document.createElement("span"); c.className="c"; c.textContent=o.k<0?"manual":o.conf?o.conf.toFixed(2):"";
+    row.append(cb,n,l,c); box.append(row);
+  }
 }
-async function backtrack(seed, terms, P){
-  // passada só de detecção (rápida) para saber onde cada objeto marcado está em todos os frames
-  const v=st.video, W=v.W, H=v.H, cv=makeCanvases(W,H), nT=Math.min(terms.length,NSLOT);
-  const all=[]; let fi=0;
+function viewToFrame(e){ const ref=st.ref, r=view.getBoundingClientRect(); return {x:clamp((e.clientX-r.left)/r.width*ref.W,0,ref.W-1), y:clamp((e.clientY-r.top)/r.height*ref.H,0,ref.H-1)}; }
+function objAt(p){ const ref=st.ref; let best=null, ba=Infinity;
+  for(const o of ref.objs){ const M=o.mask; let inside=false;
+    if(M){ const x=Math.round(p.x-M.rect.x), y=Math.round(p.y-M.rect.y); inside = x>=0&&y>=0&&x<M.rect.w&&y<M.rect.h && M.data[y*M.rect.w+x]>=0.5; }
+    const b=o.mb||o.box, inBox=p.x>=b[0]&&p.x<=b[2]&&p.y>=b[1]&&p.y<=b[3];
+    if(inside||inBox){ const a=(b[2]-b[0])*(b[3]-b[1])*(inside?0.5:1); if(a<ba){ ba=a; best=o; } } }
+  return best; }
+let drag=null, busy=false;
+async function guarded(fn){ if(busy||st.running) return; busy=true; try{ await fn(); }catch(e){ setStatus(e.message); console.error(e); } finally{ busy=false; } }
+view.addEventListener("pointerdown",e=>{
+  const ref=st.ref; if(!ref || curFrame()!==ref.fi){ if(st.video && st.tool!=="select") setStatus("Analise este frame antes de usar pins e caixas."); return; }
+  const p=viewToFrame(e);
+  if(st.tool==="box"){ drag={x0:p.x,y0:p.y,x1:p.x,y1:p.y,neg:e.shiftKey}; view.setPointerCapture(e.pointerId); return; }
+  guarded(async()=>{
+    if(st.tool==="select"){ const o=objAt(p); if(o){ o.active=!o.active; makeOverlay(o, view.width/ref.W); renderObjs(); drawCurrent(); } return; }
+    const wantIn = !(st.tool==="minus"||e.shiftKey);
+    let o=objAt(p);
+    if(o && o.parent){ // clique numa peça: refina a própria peça
+      const l = (wantIn === (o.sign>0)) ? 1 : 0; const b=o.box, bw=Math.max(1,b[2]-b[0]), bh=Math.max(1,b[3]-b[1]);
+      o.pins.push({u:(p.x-b[0])/bw, v:(p.y-b[1])/bh, l}); ref.history.push({o, kind:"pin"});
+      setStatus("Recortando…"); await reseg(o); renderObjs(); setStatus(`Pin ${wantIn?"+":"−"} refinou a peça #${o.id}.`); return; }
+    if(!o && !wantIn){ setStatus("Pin − precisa cair dentro de um objeto."); return; }
+    // peça nova: o que foi clicado vira um pedaço a somar (Pin +) ou a tirar (Pin −) do objeto
+    const region = o ? (o.mb||o.box) : [0,0,ref.W,ref.H];
+    const piece={id:st.nextId++, k:-1, sign:wantIn?1:-1, label: o? (wantIn?`soma em #${o.id}`:`tira de #${o.id}`) : "manual", active:true, pinOnly:true,
+      parent:o?o.id:null, region, box:region.slice(), pins:[{u:(p.x-region[0])/Math.max(1,region[2]-region[0]), v:(p.y-region[1])/Math.max(1,region[3]-region[1]), l:1}], prev:null, mb:null, miss:0};
+    ref.objs.push(piece); ref.history.push({o:piece, kind:"obj"});
+    setStatus("Recortando…"); await resegPinned(piece); renderObjs(); setStatus(`Pin ${wantIn?"+":"−"} criou a peça #${piece.id}.`);
+  });
+});
+async function resegPinned(o){ const ref=st.ref;
+  // peça de pin: primeiro acha o pedaço clicado dentro da região do objeto, depois passa a seguir pela própria caixa
+  const abs=pinsFor(o), reg=o.region||[0,0,ref.W,ref.H];
+  let rect;
+  if(o.parent){ const side=0.6*Math.max(reg[2]-reg[0], reg[3]-reg[1]), c=abs[0]; rect=cropRect([c.x-side/2,c.y-side/2,c.x+side/2,c.y+side/2], ref.W, ref.H, 0); }
+  else rect=cropRect(reg, ref.W, ref.H, 0.08);
+  const E=await samEncode(ref.cv, rect); o.prev=null; o.pinOnly=true;
+  await segmentObject(ref.cv, ref.W, ref.H, o, readParams(), E);
+  if(o.mb){ const nb=o.mb.slice(), bw=Math.max(1,nb[2]-nb[0]), bh=Math.max(1,nb[3]-nb[1]); o.pins=abs.map(p=>({u:(p.x-nb[0])/bw, v:(p.y-nb[1])/bh, l:p.l})); o.box=nb; o.pinOnly=false;
+    await segmentObject(ref.cv, ref.W, ref.H, o, readParams(), null); }
+  makeOverlay(o, view.width/ref.W); drawCurrent(); }
+view.addEventListener("pointermove",e=>{ if(!drag) return; const p=viewToFrame(e); drag.x1=p.x; drag.y1=p.y; drawCurrent(); });
+view.addEventListener("pointerup",e=>{ if(!drag) return; const d=drag; drag=null; const ref=st.ref;
+  const b=[Math.min(d.x0,d.x1),Math.min(d.y0,d.y1),Math.max(d.x0,d.x1),Math.max(d.y0,d.y1)];
+  if(b[2]-b[0]<8||b[3]-b[1]<8){ drawCurrent(); return; }
+  guarded(async()=>{ const o={id:st.nextId++, k:-1, sign:d.neg?-1:1, label:d.neg?"tirar (caixa)":"caixa", active:true, box:b, pins:[], prev:null, mb:null, miss:0};
+    ref.objs.push(o); ref.history.push({o, kind:"obj"}); setStatus("Recortando…"); await reseg(o); renderObjs(); setStatus(`Caixa #${o.id} adicionada.`); });
+});
+$("#undoPin").onclick=()=>guarded(async()=>{ const ref=st.ref; if(!ref||!ref.history.length) return; const h=ref.history.pop();
+  if(h.kind==="obj") ref.objs=ref.objs.filter(o=>o!==h.o); else { h.o.pins.pop(); await reseg(h.o); }
+  renderObjs(); drawCurrent(); });
+$("#clearPins").onclick=()=>guarded(async()=>{ const ref=st.ref; if(!ref) return; ref.objs=ref.objs.filter(o=>o.k>=0 && !o.parent); ref.history=[];
+  for(const o of ref.objs) if(o.pins.length){ o.pins=[]; await reseg(o); } renderObjs(); drawCurrent(); });
+
+/* ================= gerar: rastrear (frente + trás) e montar ================= */
+$("#stopBtn").onclick=()=>{ st.stop=true; setStatus("Parando…"); };
+$("#runBtn").onclick=()=>{ if(!st.running) run().catch(e=>{ setStatus(e.message); console.error(e); }).finally(()=>{ st.running=false; $("#runBtn").disabled=false; $("#stopBtn").disabled=true; }); };
+$("#finishBtn").onclick=()=>{ if(!st.running && st.raw) { st.running=true; $("#runBtn").disabled=true; assemble().catch(e=>{ setStatus(e.message); console.error(e); }).finally(()=>{ st.running=false; $("#runBtn").disabled=false; }); } };
+async function run(){
+  const v=st.video; if(!v) return;
+  if(!st.ref){ await analyze(); }
+  const ref=st.ref; if(!ref.objs.some(o=>o.active && o.sign>0)){ setStatus("Nenhum objeto ligado. Ligue um objeto ou marque com pins."); return; }
+  const terms=checkTerms(); const P=readParams(), W=v.W, H=v.H, f0=ref.fi, N=v.nFrames;
+  st.running=true; st.stop=false; $("#runBtn").disabled=true; $("#stopBtn").disabled=false; $("#saveBtn").disabled=true; $("#finishBtn").disabled=true; $("#checks").textContent=""; vid.pause();
+  const tw=Math.min(480,W), th=Math.round(tw*H/W), thumbC=new OffscreenCanvas(tw,th), thumbX=thumbC.getContext("2d",{willReadFrequently:true});
+  const raw={png:new Array(N), thumbs:new Array(N), tw, th, filled:0}; st.raw=raw; st.results=raw;
+  const mc=new OffscreenCanvas(W,H), mx=mc.getContext("2d"), mimg=mx.createImageData(W,H);
+  const t0=performance.now(); let doneN=0;
+  const store=async(i, q, cv)=>{
+    if(P.edge>0) guidedRegion(cv, q, W, H, Math.max(1,Math.round(P.edge*Math.max(W,H)/1920)));
+    const u8=new Uint8Array(W*H); for(let k=0;k<u8.length;k++) u8[k]=Math.round(q[k]*255);
+    raw.png[i]=await pngGray(u8,W,H);
+    for(let k=0,j=0;k<u8.length;k++,j+=4){ mimg.data[j]=u8[k]; mimg.data[j+3]=255; } mx.putImageData(mimg,0,0);
+    thumbX.drawImage(mc,0,0,tw,th); const td=thumbX.getImageData(0,0,tw,th).data, tm=new Uint8Array(tw*th); for(let k=0,j=0;k<tm.length;k++,j+=4) tm[k]=td[j]; raw.thumbs[i]=tm;
+    doneN++; const el=(performance.now()-t0)/1000, per=el/doneN; setBar(doneN/N*0.92);
+    setStatus(`Rastreando: frame ${i} · ${doneN}/${N} · ${per.toFixed(2)} s/frame · faltam ~${fmtTime(per*(N-doneN))}`);
+    if(doneN%4===0){ seekFrame(i); }
+  };
+  // frente: f0 → fim (frames antes de f0 ficam guardados para a volta)
+  const before=new Map(); const cv=makeCanvases(W,H);
+  let objsF=ref.objs.map(cloneObj);
   for await (const f of decodeAll(v)){
     if(st.stop){ f.close(); break; }
-    drawFrame(f, cv.fx, W, H, v.rot); f.close();
-    const R=await infer(letterbox(cv.fc,0,0,W,H), nT, 0.1);
-    all.push(R.dets.map(d=>({fb:d.fb,k:d.k,conf:d.conf})));
-    fi++; setBar(fi/v.nFrames*0.999); setStatus(`Localizando os objetos marcados… ${fi}/${v.nFrames}`);
+    const i=frameIdx(v,f.timestamp); drawFrame(f,cv.fx,W,H,v.rot); f.close();
+    if(i<f0){ before.set(i, await cv.fc.convertToBlob({type:"image/jpeg", quality:0.95})); continue; }
+    const q=await trackFrame(cv,W,H,objsF,terms,P, st.sel==="all" && i!==f0);
+    await store(i,q,cv);
   }
-  return seed.boxes.map(s=>{
-    const byFrame=new Array(all.length);
-    byFrame[seed.frame]=s.b;
-    for(const dir of [1,-1]){ let b=s.b, miss=0;
-      for(let i=seed.frame+dir; i>=0 && i<all.length; i+=dir){
-        let best=null, bi=0.25; for(const d of all[i]){ if(d.k!==s.k) continue; const x=iou(d.fb,b); if(x>bi){ bi=x; best=d; } }
-        if(best){ b=best.fb; miss=0; } else miss++;
-        byFrame[i]=b;
-      } }
-    return {k:s.k, b:byFrame[0], byFrame};
-  });
+  // trás: f0-1 → 0, começando do estado do frame de referência
+  if(!st.stop && f0>0){
+    let objsB=ref.objs.map(cloneObj);
+    for(let i=f0-1;i>=0;i--){ if(st.stop) break; const b=before.get(i); if(!b) continue;
+      const bm=await createImageBitmap(b); cv.fx.drawImage(bm,0,0); bm.close();
+      const q=await trackFrame(cv,W,H,objsB,terms,P, st.sel==="all"); await store(i,q,cv); }
+  }
+  before.clear();
+  // frames que o decodificador não entregou: máscara do vizinho mais próximo
+  for(let i=0;i<N;i++) if(!raw.png[i]){ for(let d=1;d<N;d++){ const j=raw.png[i-d]?i-d:raw.png[i+d]?i+d:-1; if(j>=0){ raw.png[i]=raw.png[j]; raw.thumbs[i]=raw.thumbs[j]; raw.filled++; break; } } }
+  raw.trackTime=(performance.now()-t0)/1000;
+  if(st.stop && raw.png.some(x=>!x)){ setStatus("Parado. O que já foi rastreado aparece no monitor; gere de novo para completar."); return; }
+  $("#finishBtn").disabled=false;
+  await assemble();
+}
+async function assemble(){
+  const v=st.video, raw=st.raw, P=readParams(), W=v.W, H=v.H, N=v.nFrames, name=base(v.name);
+  $("#saveBtn").disabled=true; setStatus("Montando: acabamento e codificação…");
+  const zip=new JSZip(), pngDir=$("#outPng").checked? zip.folder(`${name}_mascara_png`) : null;
+  let muxer=null, enc=null, chunks=0, encErr=null;
+  if($("#outMp4").checked){
+    const br=Math.min(60e6, Math.max(6e6, W*H*v.fps*0.12)); let cfg=null;
+    for(const c of ["avc1.640034","avc1.640033","avc1.640028","avc1.4d0028"]){ const t={codec:c,width:W,height:H,bitrate:br,framerate:v.fps,avc:{format:"avc"},latencyMode:"quality"}; const s=await VideoEncoder.isConfigSupported(t).catch(()=>({supported:false})); if(s.supported){ cfg=t; break; } }
+    if(!cfg) throw new Error(`O navegador não codifica H.264 em ${W}×${H}. Desmarque o MP4 e use a sequência PNG.`);
+    muxer=new Mp4Muxer.Muxer({target:new Mp4Muxer.ArrayBufferTarget(), video:{codec:"avc",width:W,height:H,frameRate:Math.round(v.fps)}, fastStart:"in-memory", firstTimestampBehavior:"offset"});
+    enc=new VideoEncoder({output:(c,m)=>{ muxer.addVideoChunk(c,m); chunks++; }, error:e=>{ encErr=e; }}); enc.configure(cfg);
+  }
+  const rc=new OffscreenCanvas(W,H), rx=rc.getContext("2d",{willReadFrequently:true});
+  const mc=new OffscreenCanvas(W,H), mx=mc.getContext("2d"), mimg=mx.createImageData(W,H);
+  const tw=raw.tw, th=raw.th, thumbX=new OffscreenCanvas(tw,th).getContext("2d",{willReadFrequently:true});
+  const cache=new Map(); const get=async i=>{ if(!cache.has(i)) cache.set(i, await pngToGray(raw.png[i],W,H,rx)); return cache.get(i); };
+  const shown={thumbs:new Array(N), tw, th}; const cov=[]; const t0=performance.now();
+  for(let i=0;i<N;i++){
+    if(st.stop) break;
+    let q; if(P.smooth>0){ const ks=[]; for(let k=i-P.smooth;k<=i+P.smooth;k++) if(k>=0&&k<N) ks.push(k); const arr=await Promise.all(ks.map(get)); q=new Float32Array(W*H);
+      for(const a of arr) for(let k=0;k<q.length;k++) q[k]+=a[k]; for(let k=0;k<q.length;k++) q[k]/=arr.length; } else q=await get(i);
+    for(const k of [...cache.keys()]) if(k<i-P.smooth) cache.delete(k);
+    const m=finish(q,W,H,P);
+    for(let k=0,j=0;k<m.length;k++,j+=4){ mimg.data[j]=mimg.data[j+1]=mimg.data[j+2]=m[k]; mimg.data[j+3]=255; } mx.putImageData(mimg,0,0);
+    if(enc){ while(enc.encodeQueueSize>4) await sleep(5); if(encErr) throw encErr; const dur=i+1<N? v.ts[i+1]-v.ts[i] : Math.round(1e6/v.fps);
+      const vf=new VideoFrame(mc,{timestamp:v.ts[i], duration:dur}); enc.encode(vf,{keyFrame:i%Math.max(1,Math.round(v.fps))===0}); vf.close(); }
+    if(pngDir) pngDir.file(`${name}_mascara_${String(i).padStart(5,"0")}.png`, await pngGray(m,W,H));
+    thumbX.drawImage(mc,0,0,tw,th); const td=thumbX.getImageData(0,0,tw,th).data, tm=new Uint8Array(tw*th); for(let k=0,j=0;k<tm.length;k++,j+=4) tm[k]=td[j]; shown.thumbs[i]=tm;
+    let s=0; for(let k=0;k<m.length;k+=97) s+=m[k]; cov.push(+(s/(m.length/97)/255).toFixed(4));
+    setBar(0.92+0.08*(i+1)/N); if(i%8===0) setStatus(`Montando ${i+1}/${N}…`);
+  }
+  if(enc){ await enc.flush(); enc.close(); if(encErr) throw encErr; muxer.finalize(); zip.file(`${name}_mascara.mp4`, muxer.target.buffer); }
+  // quadros suspeitos: salto grande de área entre vizinhos
+  const sus=[]; for(let i=1;i<cov.length-1;i++){ const a=cov[i-1],b=cov[i],c=cov[i+1], m=(a+c)/2; if(m>0.002 && Math.abs(b-m)/m>0.12 && Math.abs(a-c)/Math.max(m,1e-6)<0.06) sus.push(i); }
+  const ref=st.ref;
+  const report={video:v.name, largura:W, altura:H, frames_original:N, frames_mascara:cov.length, fps:+v.fps.toFixed(4), frame_referencia:ref.fi,
+    objetos:ref.objs.filter(o=>o.active).map(o=>({id:o.id, rotulo:o.label, subtrai:o.sign<0, pins:o.pins.length, manual:o.k<0})),
+    prompt:$("#prompt").value, parametros:P, motor:st.engine, frames_repetidos_por_falha_do_decodificador:raw.filled, frames_suspeitos:sus, cobertura_por_frame:cov,
+    tempo_rastreamento_s:+(raw.trackTime||0).toFixed(1), tempo_montagem_s:+((performance.now()-t0)/1000).toFixed(1)};
+  zip.file(`${name}_relatorio.json`, JSON.stringify(report,null,1));
+  setStatus("Gerando o ZIP…");
+  st.zipBlob=await zip.generateAsync({type:"blob",compression:"STORE"}); st.zipName=`${name}_mascaras.zip`;
+  st.results=shown;
+  const ok=cov.length===N && (!enc||chunks===N), ck=$("#checks"); ck.textContent="";
+  const items=[[cov.length===N,`${cov.length} de ${N} frames`],[true,"mesmos tempos de frame do original"],[true,`mesma resolução ${W}×${H}`],[!enc||chunks===N, enc?`MP4 com ${chunks} frames`:"MP4 desligado"]];
+  if(raw.filled) items.push([true,`${raw.filled} frame(s) que o navegador não decodificou receberam a máscara do vizinho`]);
+  items.push([!sus.length, sus.length? `revise: frames ${sus.slice(0,12).join(", ")}${sus.length>12?"…":""} (salto de área)` : "sem saltos de área entre frames"]);
+  for(const [y,t] of items){ const d=document.createElement("div"); d.className=y?"y":"n"; d.textContent=t; ck.append(d); }
+  setBar(1); setStatus(`Pronto. Rastreamento ${fmtTime(raw.trackTime||0)}, montagem ${fmtTime(report.tempo_montagem_s)}. ${ok?"Tudo bate com o original.":"Confira os itens em vermelho."} Mudou o acabamento? “Aplicar acabamento” refaz só essa parte.`);
+  $("#saveBtn").disabled=false; drawCurrent();
 }
 $("#saveBtn").onclick=async()=>{
   if(!st.zipBlob) return;
-  if(window.DLM_STANDALONE){
-    const a=document.createElement("a"); a.href=URL.createObjectURL(st.zipBlob); a.download=st.zipName; document.body.append(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(a.href), 60000); setStatus("ZIP baixado."); return;
-  }
-  const dl = window.claude ? await claude.use("downloads") : null;
+  if(window.DLM_STANDALONE){ const a=document.createElement("a"); a.href=URL.createObjectURL(st.zipBlob); a.download=st.zipName; document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),60000); setStatus("ZIP baixado."); return; }
+  const dl=window.claude? await claude.use("downloads") : null;
   if(!dl){ setStatus("Download indisponível nesta visualização. Abra o artefato no claude.ai."); return; }
-  try{ await dl.save({filename: st.zipName, data: st.zipBlob}); setStatus("ZIP enviado para download."); }
-  catch(e){ setStatus(e.code==="declined"? "Download cancelado." : e.code==="rate_limited"? "Aguarde um instante e tente de novo." : "Não foi possível baixar: "+(e.message||e.code)); }
+  try{ await dl.save({filename:st.zipName, data:st.zipBlob}); setStatus("ZIP enviado para download."); }
+  catch(e){ setStatus(e.code==="declined"?"Download cancelado.":e.code==="rate_limited"?"Aguarde um instante e tente de novo.":"Não foi possível baixar: "+(e.message||e.code)); }
 };
+window.__dlm = { st, analyze, run, assemble, viewToFrame };
 
-/* ---------------- início: exemplo carregado ---------------- */
+/* ================= início ================= */
 (async()=>{
   if(!("VideoDecoder" in window)){ setStatus("Este navegador não tem WebCodecs. Use Chrome, Edge ou Safari 17+."); $("#viewMsg").textContent="Navegador sem WebCodecs"; return; }
   loadVocab().catch(()=>{});

@@ -1,0 +1,35 @@
+{
+ "sam2_dec": [
+  "m/sam2_dec.part0.wasm",
+  "m/sam2_dec.part1.wasm"
+ ],
+ "sam2_enc16": [
+  "m/sam2_enc16.part0.wasm",
+  "m/sam2_enc16.part1.wasm",
+  "m/sam2_enc16.part2.wasm",
+  "m/sam2_enc16.part3.wasm"
+ ],
+ "sam2_enc32": [
+  "m/sam2_enc32.part0.wasm",
+  "m/sam2_enc32.part1.wasm",
+  "m/sam2_enc32.part2.wasm",
+  "m/sam2_enc32.part3.wasm",
+  "m/sam2_enc32.part4.wasm",
+  "m/sam2_enc32.part5.wasm",
+  "m/sam2_enc32.part6.wasm",
+  "m/sam2_enc32.part7.wasm"
+ ],
+ "sam_dec": [
+  "m/sam_dec.part0.wasm",
+  "m/sam_dec.part1.wasm"
+ ],
+ "sam_enc": [
+  "m/sam_enc.part0.wasm",
+  "m/sam_enc.part1.wasm"
+ ],
+ "yoloe_s": [
+  "m/yoloe_s.part0.wasm",
+  "m/yoloe_s.part1.wasm",
+  "m/yoloe_s.part2.wasm"
+ ]
+}
