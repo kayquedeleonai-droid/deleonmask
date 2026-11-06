@@ -23,7 +23,16 @@ head = ('<!doctype html>\n<html lang="pt-BR">\n<head>\n<meta charset="utf-8">\n'
         '<script>window.DLM_STANDALONE=true;</script>\n'
         '<style>:root{padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>\n'
         '</head>\n<body>\n')
-(R / "public/index.html").write_text(head + site + "\n</body>\n</html>\n")
+# título, metas, fontes e estilos vão para o <head> (no artefato o Claude cuida disso)
+import re
+hpart = ""
+for pat in [r"<title>.*?</title>\n?", r'<meta name="claude:viewport-fit-sides"[^>]*>\n?', r"<link [^>]*>\n?", r"<style>.*?</style>\n?"]:
+    for m in re.findall(pat, site, flags=re.S):
+        if "claude:" in m:
+            site = site.replace(m, "", 1); continue
+        hpart += m if m.endswith("\n") else m + "\n"; site = site.replace(m, "", 1)
+head = head.replace("</head>", hpart + "</head>")
+(R / "public/index.html").write_text(head + site.lstrip() + "\n</body>\n</html>\n")
 (R / "artifact").mkdir(exist_ok=True)
 (R / "artifact/index.html").write_text(src)
 print("ok: public/index.html, artifact/index.html")
