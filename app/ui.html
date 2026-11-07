@@ -1,0 +1,291 @@
+<title>DeLeon Mask</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* DeLeon Mask — mesa de rotoscopia.
+   Grafite neutro para não contaminar a leitura de cor do vídeo; o "acento" é o branco do matte
+   (botão principal branco com texto preto) e cada camada tem a sua cor, como nos roto de composição.
+   Layout: barra de etapas no topo · ferramentas à esquerda · monitor + linha do tempo · painel à direita. */
+:root{
+  --bg:#1a1b1f; --panel:#202227; --raise:#282a30; --sunk:#16171a; --line:#33363d; --line2:#41444c;
+  --ink:#ecebe6; --ink2:#c9c8c2; --mute:#8e919a; --matte:#f4f3ee; --matte-ink:#111214;
+  --ok:#5bd39a; --warn:#f2b94b; --bad:#ff6d6d;
+  --l1:#ff5a4e; --l2:#3ec7f5; --l3:#f5c542; --l4:#a98bff; --l5:#4ed69a; --l6:#ff8ac9;
+  --sans:"Schibsted Grotesk",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r-s:6px; --r-m:10px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;background:var(--bg);color:var(--ink)}
+body{margin:0;font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--matte);outline-offset:2px}
+
+.app{height:100%;display:grid;grid-template-columns:76px minmax(0,1fr) 380px;grid-template-rows:56px minmax(0,1fr);grid-template-areas:"top top top" "rail stage panel"}
+@media (max-width:1080px){ .app{height:auto;grid-template-columns:1fr;grid-template-rows:auto;grid-template-areas:"top" "rail" "stage" "panel"} }
+
+/* topo */
+.top{grid-area:top;display:flex;align-items:center;gap:20px;padding:0 max(16px,env(safe-area-inset-left,0px)) 0 18px;border-bottom:1px solid var(--line);background:var(--sunk);min-width:0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:-.01em;white-space:nowrap}
+.mark{width:22px;height:22px;border-radius:5px;background:linear-gradient(90deg,var(--matte) 0 50%,#000 50% 100%);box-shadow:inset 0 0 0 1px var(--line2)}
+.steps{display:flex;gap:4px;margin:0;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;display:flex;align-items:center;gap:8px;padding:6px 12px 6px 8px;border-radius:999px;color:var(--mute);font-size:13px;font-weight:500;white-space:nowrap}
+.steps li::before{content:counter(s);display:grid;place-items:center;width:20px;height:20px;border-radius:50%;border:1px solid var(--line2);font-size:11px;font-weight:600}
+.steps li.done{color:var(--ink2)} .steps li.done::before{content:"✓";background:var(--raise);border-color:var(--raise)}
+.steps li.now{color:var(--ink);background:var(--raise)} .steps li.now::before{background:var(--matte);color:var(--matte-ink);border-color:var(--matte)}
+@media (max-width:760px){ .steps{display:none} }
+.grow{flex:1}
+.pill{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mute);padding:6px 12px;border-radius:999px;background:var(--raise);white-space:nowrap;max-width:46vw;overflow:hidden;text-overflow:ellipsis}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--line2);flex:none}
+.pill.on{color:var(--ink2)} .pill.on::before{background:var(--ok)}
+.pill.busy::before{background:var(--warn);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border-radius:var(--r-s);border:1px solid var(--line2);background:var(--raise);font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--mute)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:var(--matte);color:var(--matte-ink);border-color:var(--matte)}
+.btn.primary:hover{filter:brightness(.94)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--ink2)} .btn.ghost:hover{background:var(--raise)}
+.btn.small{height:30px;padding:0 10px;font-size:12.5px}
+
+/* ferramentas */
+.rail{grid-area:rail;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-right:1px solid var(--line);background:var(--sunk)}
+@media (max-width:1080px){ .rail{flex-direction:row;justify-content:flex-start;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line);padding:8px max(16px,env(safe-area-inset-left,0px))} }
+.tool{width:60px;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:var(--r-m);border:1px solid transparent;background:transparent;color:var(--mute);font-size:10.5px;font-weight:500;cursor:pointer;letter-spacing:-.01em}
+.tool svg{width:20px;height:20px}
+.tool:hover{color:var(--ink);background:var(--raise)}
+.tool[aria-pressed=true]{color:var(--matte-ink);background:var(--matte)}
+.rail hr{width:32px;border:0;border-top:1px solid var(--line);margin:6px 0}
+@media (max-width:1080px){ .rail hr{width:1px;height:32px;border-top:0;border-left:1px solid var(--line);margin:0 4px} }
+
+/* palco */
+.stage{grid-area:stage;display:flex;flex-direction:column;gap:10px;padding:14px 16px;min-width:0;min-height:0}
+.screen{position:relative;flex:1;min-height:240px;border-radius:var(--r-m);overflow:hidden;display:grid;place-items:center;
+  background:repeating-conic-gradient(#202125 0 25%,#1b1c20 0 50%) 0 0/24px 24px}
+@media (max-width:1080px){ .screen{flex:none;aspect-ratio:16/9} }
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;touch-action:none;cursor:default}
+.screen .msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:var(--ink2);font-size:14px;text-align:center;max-width:80%}
+.drop{position:absolute;inset:10px;display:grid;place-items:center;border:2px dashed var(--matte);border-radius:var(--r-m);background:rgba(10,10,12,.7);font-weight:600;font-size:16px}
+.hud{position:absolute;left:12px;top:12px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+.hud span{font-size:12px;padding:4px 9px;border-radius:999px;background:rgba(16,17,20,.78);color:var(--ink2);backdrop-filter:blur(6px)}
+.transport{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tc{font-family:var(--mono);font-size:12.5px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.tc b{color:var(--ink);font-weight:500}
+.seg{display:inline-flex;background:var(--sunk);border:1px solid var(--line);border-radius:var(--r-s);padding:2px}
+.seg button{border:0;background:transparent;color:var(--mute);height:28px;padding:0 10px;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--raise);color:var(--ink)}
+.timeline{position:relative;border-radius:var(--r-s);background:var(--sunk);border:1px solid var(--line);cursor:pointer}
+.timeline canvas{display:block;width:100%}
+.hint{color:var(--mute);font-size:12.5px;margin:0}
+.hint b{color:var(--ink2);font-weight:600}
+
+/* painel */
+.panel{grid-area:panel;display:flex;flex-direction:column;border-left:1px solid var(--line);background:var(--panel);min-height:0}
+@media (max-width:1080px){ .panel{border-left:0;border-top:1px solid var(--line)} }
+.tabs{display:flex;gap:2px;padding:10px 12px 0;border-bottom:1px solid var(--line)}
+.tabs button{border:0;background:transparent;color:var(--mute);padding:10px 12px;font-weight:600;font-size:13.5px;border-bottom:2px solid transparent;cursor:pointer}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--matte)}
+.pane{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:18px;min-height:0}
+@media (max-width:1080px){ .pane{overflow:visible} }
+.group{display:flex;flex-direction:column;gap:10px}
+.group h3{margin:0;font-size:13px;font-weight:600;color:var(--ink2)}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.file{display:flex;align-items:center;gap:10px;min-width:0}
+.file .name{font-size:13px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.meta div{background:var(--sunk);border-radius:var(--r-s);padding:8px 10px;min-width:0}
+.meta small{display:block;color:var(--mute);font-size:11.5px}
+.meta span{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.presets{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.preset{border:1px solid var(--line);background:var(--sunk);border-radius:var(--r-s);padding:10px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--ink2);font-size:12.5px;font-weight:600;cursor:pointer}
+.preset svg{width:22px;height:22px;color:var(--mute)}
+.preset[aria-pressed=true]{border-color:var(--matte);color:var(--ink)} .preset[aria-pressed=true] svg{color:var(--matte)}
+.layer{border:1px solid var(--line);border-radius:var(--r-m);background:var(--sunk);padding:10px;display:flex;flex-direction:column;gap:8px}
+.layer.active{border-color:var(--line2);box-shadow:inset 3px 0 0 var(--lc)}
+.layer.off{opacity:.55}
+.lhead{display:flex;align-items:center;gap:8px;min-width:0}
+.swatch{width:12px;height:12px;border-radius:3px;background:var(--lc);flex:none}
+.lname{flex:1;min-width:0;border:0;background:transparent;font-weight:600;font-size:13.5px;padding:2px 0}
+.lname:focus{outline:none;border-bottom:1px solid var(--line2)}
+.icon-btn{width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:var(--r-s);background:transparent;color:var(--mute);cursor:pointer}
+.icon-btn:hover{background:var(--raise);color:var(--ink)}
+.icon-btn svg{width:16px;height:16px}
+.prompt{width:100%;border:1px solid var(--line);background:var(--panel);border-radius:var(--r-s);padding:8px 10px;font-size:13.5px}
+.prompt::placeholder{color:#6d7079}
+.terms{display:flex;flex-wrap:wrap;gap:4px}
+.term{font-size:12px;border-radius:4px;padding:2px 7px;background:var(--raise);color:var(--ink2);display:inline-flex;gap:5px;align-items:center}
+.term i{font-style:normal;color:var(--mute)}
+.term.neg{color:#9fc4ff} .term.miss{color:var(--bad);background:rgba(255,109,109,.1)}
+.sugg{display:inline-flex;gap:4px;flex-wrap:wrap}
+.sugg button{border:1px solid var(--line2);background:transparent;border-radius:4px;font-size:11.5px;padding:1px 6px;cursor:pointer}
+.lfoot{display:flex;align-items:center;gap:12px;font-size:12.5px;color:var(--mute)}
+label.ck{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);cursor:pointer}
+label.ck input{accent-color:var(--matte)}
+.objs{display:flex;flex-direction:column;gap:2px}
+.obj{display:grid;grid-template-columns:18px 12px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 8px;border-radius:var(--r-s);font-size:13px;cursor:pointer}
+.obj:hover{background:var(--raise)}
+.obj .sw{width:10px;height:10px;border-radius:50%;background:var(--lc)}
+.obj .meta2{font-family:var(--mono);font-size:11.5px;color:var(--mute)}
+.ctl{display:grid;grid-template-columns:132px minmax(0,1fr) 58px;gap:10px;align-items:center;font-size:13px;color:var(--ink2)}
+.ctl output{font-family:var(--mono);font-size:12px;text-align:right;color:var(--mute);font-variant-numeric:tabular-nums}
+.ctl select{width:100%;height:32px;border:1px solid var(--line);background:var(--sunk);border-radius:var(--r-s);padding:0 8px}
+input[type=range]{width:100%;accent-color:var(--matte)}
+.note{font-size:12px;color:var(--mute);margin:-4px 0 0 142px}
+.note.ok{color:var(--ok)} .note.err{color:var(--bad)}
+@media (max-width:480px){ .ctl{grid-template-columns:1fr 64px} .ctl label{grid-column:1/-1} .note{margin-left:0} }
+.foot{border-top:1px solid var(--line);padding:12px 16px 14px;display:flex;flex-direction:column;gap:10px;background:var(--panel)}
+.foot .row{flex-wrap:nowrap}
+.bar{height:4px;border-radius:99px;background:var(--sunk);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--matte);transition:width .25s}
+.status{font-size:12.5px;color:var(--ink2);min-height:2.9em;line-height:1.45}
+.checks{display:grid;gap:4px;font-size:12.5px}
+.checks div{display:flex;gap:8px;align-items:baseline}
+.checks div::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none;transform:translateY(-1px)}
+.checks .n::before{background:var(--warn)}
+.empty{color:var(--mute);font-size:12.5px;padding:8px 2px}
+@media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="mark" aria-hidden="true"></span>DeLeon Mask</div>
+    <ol class="steps" id="steps">
+      <li data-step="video">Vídeo</li><li data-step="mark">Marcar</li><li data-step="track">Rastrear</li><li data-step="export">Exportar</li>
+    </ol>
+    <div class="grow"></div>
+    <span class="pill" id="engineChip">Motor desligado</span>
+    <button class="btn primary" id="saveBtn" disabled>Baixar ZIP</button>
+  </header>
+
+  <aside class="rail" role="toolbar" aria-label="Ferramentas">
+    <button class="tool" data-tool="select" aria-pressed="true" title="Selecionar (V): liga e desliga objetos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M5 3l14 8-6 1.6L10.5 19z"/></svg>Seleção</button>
+    <button class="tool" data-tool="plus" aria-pressed="false" title="Pin + (A): o que deve entrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>Pin +</button>
+    <button class="tool" data-tool="minus" aria-pressed="false" title="Pin − (S): o que deve sair">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M8 12h8"/></svg>Pin −</button>
+    <button class="tool" data-tool="box" aria-pressed="false" title="Caixa (B): objeto novo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2.4"><rect x="4" y="5" width="16" height="14" rx="1.5"/></svg>Caixa</button>
+    <hr>
+    <button class="tool" id="undoPin" title="Desfazer (Ctrl+Z)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 010 12"/></svg>Desfazer</button>
+    <button class="tool" id="clearPins" title="Remove pins, caixas e correções">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>Limpar</button>
+  </aside>
+
+  <section class="stage">
+    <div class="screen" id="screen">
+      <canvas id="view" width="960" height="540" aria-label="Monitor"></canvas>
+      <div class="hud" id="hud"></div>
+      <div class="msg" id="viewMsg">Carregando o vídeo de exemplo…</div>
+      <div class="drop" id="dropHint" hidden>Solte o vídeo para abrir</div>
+    </div>
+    <div class="transport">
+      <button class="btn small" id="playBtn" aria-label="Tocar">▶</button>
+      <span class="tc" id="tc"><b>0</b> / 0</span>
+      <div class="grow"></div>
+      <div class="seg" role="group" aria-label="Visualização">
+        <button data-v="orig" aria-pressed="false">Original</button>
+        <button data-v="over" aria-pressed="true">Sobreposição</button>
+        <button data-v="mask" aria-pressed="false">Máscara</button>
+      </div>
+    </div>
+    <div class="timeline" id="timeline" title="Clique ou arraste para ir a um frame"><canvas id="tl" height="64"></canvas></div>
+    <p class="hint" id="toolHint">Vá até um frame onde o objeto aparece inteiro e clique em <b>Analisar este frame</b>. Para corrigir depois, pare em qualquer frame e use os pins.</p>
+    <video id="vid" playsinline muted hidden></video>
+  </section>
+
+  <aside class="panel">
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="layers" aria-selected="true">Camadas</button>
+      <button role="tab" data-tab="tune" aria-selected="false">Ajustes</button>
+      <button role="tab" data-tab="export" aria-selected="false">Exportar</button>
+    </nav>
+
+    <div class="pane" data-pane="layers">
+      <div class="group">
+        <div class="file"><button class="btn small" id="pickBtn">Abrir vídeo</button><span class="name" id="fileName">exemplo.mp4</span>
+          <input type="file" id="file" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v" hidden></div>
+        <div class="meta" id="meta"></div>
+      </div>
+      <div class="group">
+        <h3>O que você quer separar</h3>
+        <div class="presets" id="presets"></div>
+      </div>
+      <div class="group">
+        <div class="row"><h3 class="grow">Camadas</h3><button class="btn ghost small" id="addLayer">Adicionar camada</button></div>
+        <div id="layers"></div>
+      </div>
+      <div class="group">
+        <div class="row"><span class="hint">Objetos que entram depois</span><div class="grow"></div>
+          <div class="seg" role="group" aria-label="Objetos novos"><button data-sel="all" aria-pressed="true">Incluir</button><button data-sel="pick" aria-pressed="false">Ignorar</button></div></div>
+      </div>
+      <div class="group">
+        <h3>Objetos</h3>
+        <div class="objs" id="objs"><p class="empty">Nada analisado ainda.</p></div>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="tune" hidden>
+      <div class="group">
+        <h3>Modelos</h3>
+        <div class="ctl"><label for="detector">Detector de texto</label><select id="detector"><option value="l">YOLOE-L · preciso</option><option value="s">YOLOE-S · rápido</option></select><output></output></div>
+        <div class="ctl"><label for="cutter">Recortador</label><select id="cutter"><option value="sam2b" selected>SAM 2.1 base · máximo</option><option value="sam2s">SAM 2.1 small · preciso</option><option value="sam2">SAM 2.1 tiny · equilíbrio</option><option value="mobile">MobileSAM · rápido</option></select><output></output></div>
+        <p class="note" id="cutterNote"></p>
+      </div>
+      <div class="group">
+        <h3>Rastreamento</h3>
+        <div class="ctl"><label for="conf">Confiança do texto</label><input type="range" id="conf" min="0.05" max="0.9" step="0.01" value="0.30"><output></output></div>
+        <div class="ctl"><label for="hold">Seguir sem detecção</label><input type="range" id="hold" min="0" max="60" step="1" value="24"><output></output></div>
+        <div class="ctl"><label for="edge">Colar borda na imagem</label><input type="range" id="edge" min="0" max="8" step="1" value="0"><output></output></div>
+        <label class="ck"><input type="checkbox" id="islands" checked> Remover ilhas soltas</label>
+        <label class="ck"><input type="checkbox" id="holes" checked> Preencher furos pequenos</label>
+      </div>
+      <div class="group">
+        <h3>Acabamento</h3>
+        <p class="hint">Muda o resultado sem rastrear de novo: depois de gerar, use <b>Aplicar acabamento</b>.</p>
+        <div class="ctl"><label for="grow">Expandir ou contrair</label><input type="range" id="grow" min="-20" max="20" step="1" value="0"><output></output></div>
+        <div class="ctl"><label for="feather">Suavizar borda</label><input type="range" id="feather" min="0" max="20" step="0.5" value="0"><output></output></div>
+        <div class="ctl"><label for="smooth">Estabilizar</label><input type="range" id="smooth" min="0" max="3" step="1" value="1"><output></output></div>
+        <label class="ck"><input type="checkbox" id="hard"> Borda dura (só preto e branco)</label>
+        <label class="ck"><input type="checkbox" id="invert"> Inverter (alvo preto, fundo branco)</label>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="export" hidden>
+      <div class="group">
+        <h3>Arquivos</h3>
+        <label class="ck"><input type="checkbox" id="outMp4" checked> Vídeo MP4 de cada camada</label>
+        <label class="ck"><input type="checkbox" id="outPng" checked> Sequência PNG de cada camada</label>
+        <label class="ck"><input type="checkbox" id="outAll" checked> Máscara combinada (todas as camadas)</label>
+        <p class="hint">Tudo sai com o mesmo número de frames, os mesmos tempos e a mesma resolução do original.</p>
+        <div class="row"><button class="btn" id="finishBtn" disabled>Aplicar acabamento</button></div>
+      </div>
+      <div class="group">
+        <h3>Render no motor pesado</h3>
+        <p class="hint">Salva o projeto (camadas, objetos, pins e correções) para renderizar com SAM 2.1 grande e memória completa no computador ou na nuvem, com ProRes.</p>
+        <div class="row"><button class="btn" id="projBtn">Salvar projeto (.json)</button></div>
+      </div>
+      <div class="group" id="checksGroup" hidden>
+        <h3>Conferência</h3>
+        <div class="checks" id="checks"></div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <div class="row"><button class="btn" id="testBtn">Analisar este frame</button><button class="btn primary grow" id="runBtn">Gerar máscaras</button><button class="btn" id="stopBtn" hidden>Parar</button></div>
+      <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+      <div class="status" id="status" role="status"></div>
+    </div>
+  </aside>
+</div>
+<script src="vendor/ort.webgpu.min.js"></script>
+<script src="vendor/mp4box.all.min.js"></script>
+<script src="vendor/mp4-muxer.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script>
+/*APP_JS*/
+</script>

@@ -1,4 +1,12 @@
 {
+ "rvm": {
+  "hash": "88d45312",
+  "size": 14975696,
+  "parts": [
+   "m/rvm.88d45312.p0.wasm",
+   "m/rvm.88d45312.p1.wasm"
+  ]
+ },
  "sam2_dec": {
   "hash": "eae8f4c4",
   "size": 16900864,
@@ -141,11 +149,40 @@
    "m/sam_enc.aaed226c.p1.wasm"
   ]
  },
- "vocab_pe": {
-  "hash": "15eb4dd4",
-  "size": 4706304,
+ "vocab": {
+  "hash": "72b6dfaa",
+  "size": 55971,
   "parts": [
-   "m/vocab_pe.15eb4dd4.p0.wasm"
+   "m/vocab.72b6dfaa.p0.wasm"
+  ]
+ },
+ "vocab_pe": {
+  "hash": "5e7d9f9d",
+  "size": 4718592,
+  "parts": [
+   "m/vocab_pe.5e7d9f9d.p0.wasm"
+  ]
+ },
+ "vocab_pe_l": {
+  "hash": "75ecb6b3",
+  "size": 4718592,
+  "parts": [
+   "m/vocab_pe_l.75ecb6b3.p0.wasm"
+  ]
+ },
+ "yoloe_l": {
+  "hash": "020e1308",
+  "size": 112248681,
+  "parts": [
+   "m/yoloe_l.020e1308.p0.wasm",
+   "m/yoloe_l.020e1308.p1.wasm",
+   "m/yoloe_l.020e1308.p2.wasm",
+   "m/yoloe_l.020e1308.p3.wasm",
+   "m/yoloe_l.020e1308.p4.wasm",
+   "m/yoloe_l.020e1308.p5.wasm",
+   "m/yoloe_l.020e1308.p6.wasm",
+   "m/yoloe_l.020e1308.p7.wasm",
+   "m/yoloe_l.020e1308.p8.wasm"
   ]
  },
  "yoloe_s": {

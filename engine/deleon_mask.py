@@ -473,7 +473,9 @@ def slug(s):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("video")
-    ap.add_argument("--prompt", required=True, help='ex.: "pessoa, -microfone" ou "car, road"')
+    ap.add_argument("--prompt", default=None, help='ex.: "pessoa, -microfone" ou "car, road"')
+    ap.add_argument("--projeto", default=None, help="projeto salvo no app (DeLeon Mask → Salvar projeto): render final com SAM 2.1 em vídeo")
+    ap.add_argument("--sam", choices=["t", "s", "b", "l"], default="b", help="(com --projeto) tamanho do SAM 2.1")
     ap.add_argument("--out", default=None, help="pasta de saída (padrão: <video>_mascaras)")
     ap.add_argument("--engine", choices=["frame", "video"], default="frame",
                     help="frame = detecta em cada frame (padrão); video = SAM 2 com memória (mais estável)")
@@ -501,6 +503,12 @@ def main(argv=None):
                     help='caixa manual "x1,y1,x2,y2@frame" ou "rotulo=x1,y1,x2,y2@frame" (repetível; engine video)')
     a = ap.parse_args(argv)
 
+    if a.projeto:
+        sys.path.insert(0, str(HERE))
+        import projeto
+        return projeto.render(a.video, a.projeto, a.out, a.sam, a.formatos if a.formatos != "mp4,mov,png" else "mov,mp4,png")
+    if not a.prompt:
+        raise SystemExit("Use --prompt \"o que separar\" ou --projeto arquivo.json")
     t0 = time.time()
     targets = parse_prompt(a.prompt)
     info = probe(a.video)

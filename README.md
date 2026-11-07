@@ -11,8 +11,9 @@ com o mesmo número de frames, os mesmos tempos e a mesma resolução do origina
 ## Estrutura
 | Pasta | O quê |
 |---|---|
-| `app/index.src.html` | fonte única do app |
-| `app/build.py` | gera `public/index.html` (site) e `artifact/index.html` (artefato do Claude) |
+| `app/ui.html` + `app/js/*.js` | fonte do app (interface, motor, vídeo, visão, rastreamento) |
+| `app/build.py` | monta `public/index.html` |
+| `engine/pack_models.py` | empacota os modelos com hash no nome + `public/models.json` |
 | `public/` | o que vai para o Cloudflare: app, `_headers`, modelo em partes (`m/`), libs (`vendor/`) |
 | `engine/` | pipeline Python + exportação do modelo para o navegador |
 | `docs/` | documentação técnica e roadmap |
@@ -30,7 +31,14 @@ repository), cada push na `main` publica sozinho. Sem build: o comando de deploy
 
 `_headers` liga o isolamento entre origens (COOP/COEP) para o WASM usar várias threads.
 
-## Motor pesado
+## Render final a partir do app
+No app: Exportar → **Salvar projeto (.json)**. Depois:
+```bash
+python3 engine/deleon_mask.py VIDEO.mp4 --projeto VIDEO_projeto.json --sam l --out saida/
+```
+SAM 2.1 em modo vídeo (memória completa), ProRes 422 HQ + MP4 + PNG por camada e a combinada.
+
+## Motor pesado (sem app)
 ```bash
 bash engine/setup_mascara.sh ~/mask_models && export DELEON_MASK_MODELS=~/mask_models
 python3 engine/deleon_mask.py video.mp4 --prompt "pessoa, -microfone" --engine video --out saida/
