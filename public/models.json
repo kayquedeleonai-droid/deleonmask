@@ -1,0 +1,160 @@
+{
+ "sam2_dec": {
+  "hash": "eae8f4c4",
+  "size": 16900864,
+  "parts": [
+   "m/sam2_dec.eae8f4c4.p0.wasm",
+   "m/sam2_dec.eae8f4c4.p1.wasm"
+  ]
+ },
+ "sam2_enc16": {
+  "hash": "420b175f",
+  "size": 67271187,
+  "parts": [
+   "m/sam2_enc16.420b175f.p0.wasm",
+   "m/sam2_enc16.420b175f.p1.wasm",
+   "m/sam2_enc16.420b175f.p2.wasm",
+   "m/sam2_enc16.420b175f.p3.wasm",
+   "m/sam2_enc16.420b175f.p4.wasm"
+  ]
+ },
+ "sam2_enc32": {
+  "hash": "3746901b",
+  "size": 134319538,
+  "parts": [
+   "m/sam2_enc32.3746901b.p0.wasm",
+   "m/sam2_enc32.3746901b.p1.wasm",
+   "m/sam2_enc32.3746901b.p2.wasm",
+   "m/sam2_enc32.3746901b.p3.wasm",
+   "m/sam2_enc32.3746901b.p4.wasm",
+   "m/sam2_enc32.3746901b.p5.wasm",
+   "m/sam2_enc32.3746901b.p6.wasm",
+   "m/sam2_enc32.3746901b.p7.wasm",
+   "m/sam2_enc32.3746901b.p8.wasm",
+   "m/sam2_enc32.3746901b.p9.wasm"
+  ]
+ },
+ "sam2b_dec": {
+  "hash": "eae4370a",
+  "size": 16900864,
+  "parts": [
+   "m/sam2b_dec.eae4370a.p0.wasm",
+   "m/sam2b_dec.eae4370a.p1.wasm"
+  ]
+ },
+ "sam2b_enc16": {
+  "hash": "e9bc8a4c",
+  "size": 153332518,
+  "parts": [
+   "m/sam2b_enc16.e9bc8a4c.p0.wasm",
+   "m/sam2b_enc16.e9bc8a4c.p1.wasm",
+   "m/sam2b_enc16.e9bc8a4c.p2.wasm",
+   "m/sam2b_enc16.e9bc8a4c.p3.wasm",
+   "m/sam2b_enc16.e9bc8a4c.p4.wasm",
+   "m/sam2b_enc16.e9bc8a4c.p5.wasm",
+   "m/sam2b_enc16.e9bc8a4c.p6.wasm",
+   "m/sam2b_enc16.e9bc8a4c.p7.wasm",
+   "m/sam2b_enc16.e9bc8a4c.p8.wasm",
+   "m/sam2b_enc16.e9bc8a4c.p9.wasm",
+   "m/sam2b_enc16.e9bc8a4c.p10.wasm"
+  ]
+ },
+ "sam2b_enc32": {
+  "hash": "18ffee5e",
+  "size": 306216890,
+  "parts": [
+   "m/sam2b_enc32.18ffee5e.p0.wasm",
+   "m/sam2b_enc32.18ffee5e.p1.wasm",
+   "m/sam2b_enc32.18ffee5e.p2.wasm",
+   "m/sam2b_enc32.18ffee5e.p3.wasm",
+   "m/sam2b_enc32.18ffee5e.p4.wasm",
+   "m/sam2b_enc32.18ffee5e.p5.wasm",
+   "m/sam2b_enc32.18ffee5e.p6.wasm",
+   "m/sam2b_enc32.18ffee5e.p7.wasm",
+   "m/sam2b_enc32.18ffee5e.p8.wasm",
+   "m/sam2b_enc32.18ffee5e.p9.wasm",
+   "m/sam2b_enc32.18ffee5e.p10.wasm",
+   "m/sam2b_enc32.18ffee5e.p11.wasm",
+   "m/sam2b_enc32.18ffee5e.p12.wasm",
+   "m/sam2b_enc32.18ffee5e.p13.wasm",
+   "m/sam2b_enc32.18ffee5e.p14.wasm",
+   "m/sam2b_enc32.18ffee5e.p15.wasm",
+   "m/sam2b_enc32.18ffee5e.p16.wasm",
+   "m/sam2b_enc32.18ffee5e.p17.wasm",
+   "m/sam2b_enc32.18ffee5e.p18.wasm",
+   "m/sam2b_enc32.18ffee5e.p19.wasm",
+   "m/sam2b_enc32.18ffee5e.p20.wasm",
+   "m/sam2b_enc32.18ffee5e.p21.wasm"
+  ]
+ },
+ "sam2s_dec": {
+  "hash": "51f33de1",
+  "size": 16900864,
+  "parts": [
+   "m/sam2s_dec.51f33de1.p0.wasm",
+   "m/sam2s_dec.51f33de1.p1.wasm"
+  ]
+ },
+ "sam2s_enc16": {
+  "hash": "6e5c7cb3",
+  "size": 81542595,
+  "parts": [
+   "m/sam2s_enc16.6e5c7cb3.p0.wasm",
+   "m/sam2s_enc16.6e5c7cb3.p1.wasm",
+   "m/sam2s_enc16.6e5c7cb3.p2.wasm",
+   "m/sam2s_enc16.6e5c7cb3.p3.wasm",
+   "m/sam2s_enc16.6e5c7cb3.p4.wasm",
+   "m/sam2s_enc16.6e5c7cb3.p5.wasm"
+  ]
+ },
+ "sam2s_enc32": {
+  "hash": "f4cdf6ef",
+  "size": 162786674,
+  "parts": [
+   "m/sam2s_enc32.f4cdf6ef.p0.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p1.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p2.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p3.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p4.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p5.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p6.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p7.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p8.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p9.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p10.wasm",
+   "m/sam2s_enc32.f4cdf6ef.p11.wasm"
+  ]
+ },
+ "sam_dec": {
+  "hash": "9157d462",
+  "size": 16373188,
+  "parts": [
+   "m/sam_dec.9157d462.p0.wasm",
+   "m/sam_dec.9157d462.p1.wasm"
+  ]
+ },
+ "sam_enc": {
+  "hash": "aaed226c",
+  "size": 27974754,
+  "parts": [
+   "m/sam_enc.aaed226c.p0.wasm",
+   "m/sam_enc.aaed226c.p1.wasm"
+  ]
+ },
+ "vocab_pe": {
+  "hash": "15eb4dd4",
+  "size": 4706304,
+  "parts": [
+   "m/vocab_pe.15eb4dd4.p0.wasm"
+  ]
+ },
+ "yoloe_s": {
+  "hash": "eeaa1543",
+  "size": 41286991,
+  "parts": [
+   "m/yoloe_s.eeaa1543.p0.wasm",
+   "m/yoloe_s.eeaa1543.p1.wasm",
+   "m/yoloe_s.eeaa1543.p2.wasm"
+  ]
+ }
+}

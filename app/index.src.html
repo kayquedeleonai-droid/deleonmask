@@ -275,22 +275,32 @@ let ortQ=Promise.resolve();
 function runOrt(sess, feeds){ const p=ortQ.then(()=>sess.run(feeds)); ortQ=p.then(()=>{},()=>{}); return p; }
 function chip(t, cls){ const c=$("#engineChip"); c.textContent=t; c.className="chip "+(cls||""); }
 const withTimeout=(p, ms, what)=>Promise.race([p, sleep(ms).then(()=>{ throw new Error(`${what}: passou de ${Math.round(ms/1000)} s`); })]);
-async function fetchBytes(n, onProgress){
-  try{ const c=await caches.open("deleon-mask-v3"); const hit=await c.match(n); if(hit){ const b=new Uint8Array(await hit.arrayBuffer()); onProgress(b.length); return b; } }catch(e){}
-  const r=await withTimeout(fetch(n), 30000, `Conexão com ${n}`);
+const CACHE="deleon-mask-v4";
+// apaga caches antigos (partes com o mesmo nome de versões anteriores misturavam e corrompiam o modelo)
+caches.keys().then(ks=>ks.filter(k=>k.startsWith("deleon-mask-")&&k!==CACHE).forEach(k=>caches.delete(k))).catch(()=>{});
+async function fetchBytes(n, onProgress, fresh){
+  if(!fresh){ try{ const c=await caches.open(CACHE); const hit=await c.match(n); if(hit){ const b=new Uint8Array(await hit.arrayBuffer()); onProgress(b.length); return b; } }catch(e){} }
+  const r=await withTimeout(fetch(n, fresh?{cache:"reload"}:{}), 30000, `Conexão com ${n}`);
   if(!r.ok) throw new Error(`Não consegui baixar ${n} (erro ${r.status})`);
-  const total=+r.headers.get("content-length")||0, rd=r.body.getReader(), chunks=[]; let got=0, last=Date.now();
-  for(;;){ const {done,value}=await withTimeout(rd.read(), 60000, `Download de ${n} parado`); if(done) break; chunks.push(value); got+=value.length; onProgress(value.length); last=Date.now(); }
+  const total=+r.headers.get("content-length")||0, rd=r.body.getReader(), chunks=[]; let got=0;
+  for(;;){ const {done,value}=await withTimeout(rd.read(), 60000, `Download de ${n} parado`); if(done) break; chunks.push(value); got+=value.length; onProgress(value.length); }
   const out=new Uint8Array(got); let o=0; for(const c of chunks){ out.set(c,o); o+=c.length; }
   if(total && got!==total) throw new Error(`Download incompleto de ${n}`);
-  caches.open("deleon-mask-v3").then(c=>c.put(n,new Response(out.slice()))).catch(()=>{});
+  caches.open(CACHE).then(c=>c.put(n,new Response(out.slice()))).catch(()=>{});
   return out;
 }
-const PART=14000000;
-async function fetchParts(names, label, report){
-  let got=0; const total=names.length*PART;
-  const bufs=[]; for(const n of names) bufs.push(await fetchBytes(n, k=>{ got+=k; report && report(label, Math.min(1,got/total)); }));
-  const len=bufs.reduce((a,b)=>a+b.length,0), out=new Uint8Array(len); let o=0; for(const b of bufs){ out.set(b,o); o+=b.length; } return out;
+async function fetchParts(entry, label, report){
+  // entry = {hash, size, parts} do models.json (ou lista simples de arquivos)
+  const names = Array.isArray(entry)? entry : entry.parts, want = Array.isArray(entry)? 0 : entry.size;
+  for(let attempt=0; attempt<2; attempt++){
+    let got=0; const total=want||names.length*14000000; const bufs=[];
+    for(const n of names) bufs.push(await fetchBytes(n, k=>{ got+=k; report && report(label, Math.min(1,got/total)); }, attempt>0));
+    const len=bufs.reduce((a,b)=>a+b.length,0);
+    if(want && len!==want){ // cópia velha ou corrompida: limpa e baixa de novo, sem cache
+      console.warn(label,"tamanho errado",len,want); try{ const c=await caches.open(CACHE); for(const n of names) await c.delete(n); }catch(e){} continue; }
+    const out=new Uint8Array(len); let o=0; for(const b of bufs){ out.set(b,o); o+=b.length; } return out;
+  }
+  throw new Error(`O arquivo do ${label} chegou corrompido duas vezes. Recarregue a página (Ctrl+Shift+R).`);
 }
 async function loadVocab(){ if(st.vocab) return; st.vocab=await (await fetch("m/vocab.json")).json(); st.vocabIdx=new Map(st.vocab.map((v,i)=>[v,i])); renderTerms(); }
 async function makeSession(bytes, what, eps){
@@ -303,7 +313,8 @@ let engineLoading=null;
 function loadEngine(){ return engineLoading ||= (async()=>{
   await loadVocab();
   chip("baixando…","warn");
-  st.pe = new Uint16Array((await fetchParts(["m/vocab_pe.wasm"],"vocabulário",fg)).buffer);
+  st.models = await (await fetch("models.json",{cache:"no-store"})).json();
+  st.pe = new Uint16Array((await fetchParts(st.models.vocab_pe,"vocabulário",fg)).buffer);
   if(window.DLM_STANDALONE){
     ort.env.wasm.wasmPaths = new URL("vendor/", location.href).href;
     ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(8, navigator.hardwareConcurrency||4) : 1;
@@ -313,7 +324,6 @@ function loadEngine(){ return engineLoading ||= (async()=>{
     ort.env.wasm.wasmPaths={ mjs:"https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort-wasm-simd-threaded.jsep.mjs" };
     ort.env.wasm.wasmBinary=wasm.buffer;
   }
-  st.models = await (await fetch("m/models.json")).json();
   const y=await fetchParts(st.models.yoloe_s,"detector",fg);
   chip("iniciando detector…","warn"); setStatus("Iniciando o detector…");
   let ep; [st.yolo,ep]=await makeSession(y,"o detector"); st.engine=ep;
