@@ -7,7 +7,8 @@
   "m/sam2_enc16.part0.wasm",
   "m/sam2_enc16.part1.wasm",
   "m/sam2_enc16.part2.wasm",
-  "m/sam2_enc16.part3.wasm"
+  "m/sam2_enc16.part3.wasm",
+  "m/sam2_enc16.part4.wasm"
  ],
  "sam2_enc32": [
   "m/sam2_enc32.part0.wasm",
@@ -17,7 +18,9 @@
   "m/sam2_enc32.part4.wasm",
   "m/sam2_enc32.part5.wasm",
   "m/sam2_enc32.part6.wasm",
-  "m/sam2_enc32.part7.wasm"
+  "m/sam2_enc32.part7.wasm",
+  "m/sam2_enc32.part8.wasm",
+  "m/sam2_enc32.part9.wasm"
  ],
  "sam_dec": [
   "m/sam_dec.part0.wasm",

@@ -271,68 +271,98 @@ function renderTerms(){
 $("#prompt").addEventListener("input", ()=>renderTerms());
 
 /* ================= motor (download + sessões) ================= */
-async function fetchParts(names, label, w0, w1){
-  const bufs=[]; let got=0;
-  for(const n of names){
-    let r; try{ const c=await caches.open("deleon-mask-v2"); r=await c.match(n); if(!r){ const f=await fetch(n); if(!f.ok) throw new Error(n+" "+f.status); await c.put(n,f.clone()); r=f; } }
-    catch(e){ r=await fetch(n); if(!r.ok) throw new Error(`Não consegui baixar ${n} (${r.status})`); }
-    bufs.push(new Uint8Array(await r.arrayBuffer())); got++;
-    setBar(w0+(w1-w0)*got/names.length); setStatus(`Baixando ${label}… ${got}/${names.length}`);
-  }
+/* Carregamento em duas etapas: detector + MobileSAM primeiro (o app fica pronto rápido),
+   SAM 2.1 depois, em segundo plano, só com placa de vídeo. Todo passo tem limite de tempo e aparece no topo. */
+function chip(t, cls){ const c=$("#engineChip"); c.textContent=t; c.className="chip "+(cls||""); }
+const withTimeout=(p, ms, what)=>Promise.race([p, sleep(ms).then(()=>{ throw new Error(`${what}: passou de ${Math.round(ms/1000)} s`); })]);
+async function fetchBytes(n, onProgress){
+  try{ const c=await caches.open("deleon-mask-v3"); const hit=await c.match(n); if(hit){ const b=new Uint8Array(await hit.arrayBuffer()); onProgress(b.length); return b; } }catch(e){}
+  const r=await withTimeout(fetch(n), 30000, `Conexão com ${n}`);
+  if(!r.ok) throw new Error(`Não consegui baixar ${n} (erro ${r.status})`);
+  const total=+r.headers.get("content-length")||0, rd=r.body.getReader(), chunks=[]; let got=0, last=Date.now();
+  for(;;){ const {done,value}=await withTimeout(rd.read(), 60000, `Download de ${n} parado`); if(done) break; chunks.push(value); got+=value.length; onProgress(value.length); last=Date.now(); }
+  const out=new Uint8Array(got); let o=0; for(const c of chunks){ out.set(c,o); o+=c.length; }
+  if(total && got!==total) throw new Error(`Download incompleto de ${n}`);
+  caches.open("deleon-mask-v3").then(c=>c.put(n,new Response(out.slice()))).catch(()=>{});
+  return out;
+}
+const PART=14000000;
+async function fetchParts(names, label, report){
+  let got=0; const total=names.length*PART;
+  const bufs=[]; for(const n of names) bufs.push(await fetchBytes(n, k=>{ got+=k; report && report(label, Math.min(1,got/total)); }));
   const len=bufs.reduce((a,b)=>a+b.length,0), out=new Uint8Array(len); let o=0; for(const b of bufs){ out.set(b,o); o+=b.length; } return out;
 }
 async function loadVocab(){ if(st.vocab) return; st.vocab=await (await fetch("m/vocab.json")).json(); st.vocabIdx=new Map(st.vocab.map((v,i)=>[v,i])); renderTerms(); }
-async function makeSession(bytes){
-  const tries=("gpu" in navigator && navigator.gpu)? ["webgpu","wasm"] : ["wasm"]; let last;
-  for(const ep of tries){ try{ const s=await ort.InferenceSession.create(bytes,{executionProviders:[ep], graphOptimizationLevel:"all"}); return [s,ep]; }catch(e){ last=e; console.warn(ep,e); } }
-  throw new Error("O motor não iniciou neste navegador: "+(last&&last.message));
+async function makeSession(bytes, what, eps){
+  eps = eps || (("gpu" in navigator && navigator.gpu)? ["webgpu","wasm"] : ["wasm"]); let last;
+  for(const ep of eps){ try{ const s=await withTimeout(ort.InferenceSession.create(bytes,{executionProviders:[ep], graphOptimizationLevel:"all"}), 90000, `Iniciar ${what} (${ep})`); return [s,ep]; }catch(e){ last=e; console.warn(what, ep, e); } }
+  throw new Error(`Não consegui iniciar ${what}: `+(last&&last.message));
 }
+const fg=(label,f)=>{ setBar(f); setStatus(`Baixando ${label}… ${Math.round(f*100)}%`); chip(`baixando ${label} ${Math.round(f*100)}%`,"warn"); };
 let engineLoading=null;
 function loadEngine(){ return engineLoading ||= (async()=>{
   await loadVocab();
-  $("#engineChip").textContent="motor: baixando…"; $("#engineChip").className="chip warn";
-  st.pe = new Uint16Array((await fetchParts(["m/vocab_pe.wasm"],"vocabulário",0,.03)).buffer);
+  chip("baixando…","warn");
+  st.pe = new Uint16Array((await fetchParts(["m/vocab_pe.wasm"],"vocabulário",fg)).buffer);
   if(window.DLM_STANDALONE){
     ort.env.wasm.wasmPaths = new URL("vendor/", location.href).href;
     ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(8, navigator.hardwareConcurrency||4) : 1;
   } else {
-    const wasm=await fetchParts(["m/ortjsep.part0.wasm","m/ortjsep.part1.wasm"],"runtime",.03,.2);
+    const wasm=await fetchParts(["m/ortjsep.part0.wasm","m/ortjsep.part1.wasm"],"runtime",fg);
     ort.env.wasm.numThreads=1;
     ort.env.wasm.wasmPaths={ mjs:"https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort-wasm-simd-threaded.jsep.mjs" };
     ort.env.wasm.wasmBinary=wasm.buffer;
   }
   st.models = await (await fetch("m/models.json")).json();
-  const y=await fetchParts(["m/yoloe_s.part0.wasm","m/yoloe_s.part1.wasm","m/yoloe_s.part2.wasm"],"detector de texto",.2,.6);
-  setStatus("Iniciando o motor…");
-  let ep; [st.yolo,ep]=await makeSession(y); st.engine=ep;
-  // sem placa de vídeo, o SAM 2.1 fica lento demais no processador: começa no MobileSAM (dá para trocar)
-  if(!st.cutterPicked) $("#cutter").value = ep==="webgpu" ? "sam2" : "mobile";
-  await loadCutter(.6,1);
-  $("#engineChip").className="chip on"; setBar(0); setStatus("");
-})().catch(e=>{ engineLoading=null; throw e; }); }
-// recortador: SAM 2.1 (precisão; usa detalhes finos da imagem e sabe quando o objeto saiu de cena) ou MobileSAM (rápido)
-async function gpuHasF16(){ try{ const a=await navigator.gpu?.requestAdapter(); return !!a && a.features.has("shader-f16"); }catch(e){ return false; } }
-async function loadCutter(w0=0, w1=1){
-  const kind=$("#cutter").value; if(st.cutter===kind && st.enc) return;
-  st.enc=null; st.dec=null;
-  let encName="sam_enc", decName="sam_dec";
-  if(kind==="sam2"){ decName="sam2_dec"; encName = (st.engine==="webgpu" && await gpuHasF16()) ? "sam2_enc16" : "sam2_enc32"; }
-  const e=await fetchParts(st.models[encName],"recortador",w0,w0+(w1-w0)*0.85);
-  const d=await fetchParts(st.models[decName],"recortador",w0+(w1-w0)*0.85,w1);
-  setStatus("Iniciando o recortador…");
-  [st.enc]=await makeSession(e); [st.dec]=await makeSession(d); st.cutter=kind; st.encName=encName;
-  if(kind==="sam2"){ // teste rápido: se o SAM 2.1 não roda bem neste computador, volta para o MobileSAM
-    setStatus("Testando o SAM 2.1 neste computador…");
-    const t0=performance.now();
-    const probe=st.enc.run({image:new ort.Tensor("float32", new Float32Array(3*SAMS*SAMS), [1,3,SAMS,SAMS])}).then(()=>true, e=>{ console.warn(e); return false; });
-    const ok=await Promise.race([probe, sleep(20000).then(()=>false)]);
-    if(!ok){ st.enc=null; st.dec=null; st.cutter=null; $("#cutter").value="mobile"; st.samFallback=true;
-      await loadCutter(w0,w1); setStatus("O SAM 2.1 ficou lento demais aqui; usando o MobileSAM. Para a melhor qualidade, use o pipeline na nuvem."); return; }
-    console.log("SAM 2.1 teste", Math.round(performance.now()-t0), "ms");
-  }
-  $("#engineChip").textContent = (st.engine==="webgpu" ? "placa de vídeo (WebGPU)" : `processador (WASM${ort.env.wasm.numThreads>1?" ×"+ort.env.wasm.numThreads:""})`) + " · " + (kind==="sam2"?"SAM 2.1":"MobileSAM");
-  setBar(0); setStatus("");
+  const y=await fetchParts(st.models.yoloe_s,"detector",fg);
+  chip("iniciando detector…","warn"); setStatus("Iniciando o detector…");
+  let ep; [st.yolo,ep]=await makeSession(y,"o detector"); st.engine=ep;
+  st.sess={};
+  const wantSam2 = !st.cutterPicked || $("#cutter").value==="sam2";
+  await loadMobile();
+  useCutter("mobile");
+  setBar(0); setStatus("Motor pronto.");
+  // com placa de vídeo, o SAM 2.1 vem em seguida sem travar nada
+  if(ep==="webgpu" && wantSam2) upgradeSam2().catch(e=>console.warn(e));
+})().catch(e=>{ engineLoading=null; chip("motor com erro","warn"); throw e; }); }
+async function loadMobile(){
+  if(st.sess.mobile) return;
+  const e=await fetchParts(st.models.sam_enc,"recortador",fg), d=await fetchParts(st.models.sam_dec,"recortador",fg);
+  chip("iniciando recortador…","warn"); setStatus("Iniciando o recortador…");
+  const [enc]=await makeSession(e,"o recortador"), [dec]=await makeSession(d,"o recortador");
+  st.sess.mobile={enc,dec};
 }
+function engineLabel(){ return (st.engine==="webgpu" ? "placa de vídeo" : `processador${ort.env.wasm.numThreads>1?" ×"+ort.env.wasm.numThreads:""}`) + " · " + (st.cutter==="sam2"?"SAM 2.1":"MobileSAM"); }
+function useCutter(kind){ const S=st.sess[kind]; if(!S) return false; st.enc=S.enc; st.dec=S.dec; st.cutter=kind; $("#cutter").value=kind; chip(engineLabel(),"on"); return true; }
+async function gpuHasF16(){ try{ const a=await navigator.gpu?.requestAdapter(); return !!a && a.features.has("shader-f16"); }catch(e){ return false; } }
+let sam2Loading=null;
+function upgradeSam2(){ return sam2Loading ||= (async()=>{
+  const bg=(label,f)=>chip(`MobileSAM pronto · SAM 2.1 baixando ${Math.round(f*100)}%`,"on");
+  try{
+    const gpu = st.engine==="webgpu";
+    const encName = (gpu && await gpuHasF16()) ? "sam2_enc16" : "sam2_enc32";
+    const e=await fetchParts(st.models[encName],"SAM 2.1",bg), d=await fetchParts(st.models.sam2_dec,"SAM 2.1",bg);
+    chip("MobileSAM pronto · iniciando SAM 2.1…","on");
+    const eps = gpu? ["webgpu"] : ["wasm"];
+    const [enc]=await makeSession(e,"o SAM 2.1",eps), [dec]=await makeSession(d,"o SAM 2.1",eps);
+    chip("MobileSAM pronto · testando SAM 2.1…","on");
+    const t0=performance.now();
+    await withTimeout(enc.run({image:new ort.Tensor("float32", new Float32Array(3*SAMS*SAMS), [1,3,SAMS,SAMS])}), gpu?20000:90000, "Teste do SAM 2.1");
+    console.log("SAM 2.1 teste", Math.round(performance.now()-t0), "ms");
+    st.sess.sam2={enc,dec};
+    // troca quando não houver nada rodando
+    while(st.running||busy) await sleep(500);
+    if(!st.cutterPicked || st.cutterWant==="sam2"){ useCutter("sam2");
+      if(st.ref){ busy=true; try{ await resegAll(); renderObjs(); drawCurrent(); } finally{ busy=false; } }
+      setStatus("SAM 2.1 ativo (contorno mais preciso)."); }
+    return true;
+  }catch(e){
+    console.warn("SAM 2.1", e); sam2Loading=null; st.sam2Error=e.message;
+    if(st.cutter!=="sam2"){ $("#cutter").value="mobile"; chip(engineLabel(),"on"); }
+    setStatus(`SAM 2.1 não ficou disponível aqui (${e.message}). Seguindo com o MobileSAM.`);
+    return false;
+  }
+})(); }
 function f16(h){ const s=(h&0x8000)?-1:1, e=(h>>10)&31, f=h&1023; if(e===0) return s*Math.pow(2,-14)*(f/1024); if(e===31) return f?NaN:s*Infinity; return s*Math.pow(2,e-15)*(1+f/1024); }
 function buildTpe(terms){
   const t=new Float32Array(NSLOT*512);
@@ -694,8 +724,12 @@ async function resegAll(){ const ref=st.ref, P=readParams(); const sc=view.width
 async function reseg(o){ const ref=st.ref; o.prev=null; await segmentObject(ref.cv, ref.W, ref.H, o, readParams(), null);
   // segunda passada com a própria máscara como guia: borda mais estável
   await segmentObject(ref.cv, ref.W, ref.H, o, readParams(), null); makeOverlay(o, view.width/ref.W); drawCurrent(); }
-$("#cutter").addEventListener("change", ()=>guarded(async()=>{ st.cutterPicked=true;
-  if($("#cutter").value==="sam2" && st.engine && st.engine!=="webgpu") setStatus("Aviso: sem placa de vídeo o SAM 2.1 é bem mais lento. Para vídeos longos, use o pipeline na nuvem."); if(!engineLoading) return; await engineLoading; await loadCutter(); if(st.ref){ await resegAll(); renderObjs(); drawCurrent(); setStatus("Recortador trocado. Objetos recortados de novo."); } }));
+$("#cutter").addEventListener("change", ()=>{ st.cutterPicked=true; const want=$("#cutter").value; st.cutterWant=want;
+  if(!engineLoading){ return; }
+  if(want==="mobile"){ if(useCutter("mobile") && st.ref) guarded(async()=>{ await resegAll(); renderObjs(); drawCurrent(); }); return; }
+  if(st.sess && st.sess.sam2){ if(useCutter("sam2") && st.ref) guarded(async()=>{ await resegAll(); renderObjs(); drawCurrent(); }); return; }
+  setStatus(st.engine && st.engine!=="webgpu" ? "Baixando o SAM 2.1. Sem placa de vídeo ele leva alguns segundos por objeto em cada frame; você pode continuar usando o MobileSAM enquanto isso." : "Baixando o SAM 2.1 em segundo plano. Você pode continuar usando o app.");
+  $("#cutter").value=st.cutter||"mobile"; upgradeSam2(); });
 $("#testBtn").onclick=async()=>{ if(st.running) return; try{ await analyze(); }catch(e){ setStatus(e.message); console.error(e); } };
 
 function renderObjs(){
