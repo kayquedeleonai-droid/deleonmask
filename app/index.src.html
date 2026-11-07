@@ -468,7 +468,7 @@ function logitsToMask(E, logits){ // 256² → recorte em resolução cheia (pro
   for(let y=0;y<h;y++){ const ly=clamp(((y+0.5)*E.s)/4-0.5,0,255), y0=ly|0, y1=Math.min(255,y0+1), fy=ly-y0;
     for(let x=0;x<w;x++){ const lx=clamp(((x+0.5)*E.s)/4-0.5,0,255), x0=lx|0, x1=Math.min(255,x0+1), fx=lx-x0;
       const v=(logits[y0*256+x0]*(1-fx)+logits[y0*256+x1]*fx)*(1-fy)+(logits[y1*256+x0]*(1-fx)+logits[y1*256+x1]*fx)*fy;
-      data[y*w+x]=1/(1+Math.exp(-v)); } }
+      const pr=1/(1+Math.exp(-v)); data[y*w+x]= pr<=0.3?0 : pr>=0.7?1 : (pr-0.3)/0.4; } } // corta a névoa de baixa confiança, mantém 1–2 px de antisserrilhado
   return {rect:R, data};
 }
 function cleanMask(M, obj, P){ // remove ilhas e preenche furos pequenos, no recorte
