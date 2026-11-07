@@ -168,7 +168,7 @@ label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
 
     <section class="p" aria-labelledby="h3">
       <h2 id="h3"><b>03</b> Rastreamento</h2>
-      <div class="ctl"><label for="cutter">Recortador</label><select id="cutter"><option value="sam2" selected>SAM 2.1 tiny · equilíbrio (~70 MB)</option><option value="sam2s">SAM 2.1 small · mais preciso (~100 MB)</option><option value="sam2b">SAM 2.1 base · máximo, só placa de vídeo (~170 MB)</option><option value="mobile">MobileSAM · rápido</option></select><output></output></div>
+      <div class="ctl"><label for="cutter">Recortador</label><select id="cutter"><option value="sam2">SAM 2.1 tiny · equilíbrio (~70 MB)</option><option value="sam2s">SAM 2.1 small · mais preciso (~100 MB)</option><option value="sam2b" selected>SAM 2.1 base · máximo, só placa de vídeo (~170 MB)</option><option value="mobile">MobileSAM · rápido</option></select><output></output></div>
       <div class="ctl"><label for="conf">Confiança do texto</label><input type="range" id="conf" min="0.05" max="0.9" step="0.01" value="0.30"><output for="conf"></output></div>
       <div class="ctl"><label for="edge">Colar na imagem</label><input type="range" id="edge" min="0" max="8" step="1" value="0"><output for="edge"></output></div>
       <div class="ctl"><label for="hold">Seguir sem detecção</label><input type="range" id="hold" min="0" max="60" step="1" value="24"><output for="hold"></output></div>
@@ -202,7 +202,7 @@ label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
     </section>
   </div>
 </main>
-<p class="foot">Tudo roda no seu computador (placa de vídeo pelo WebGPU, ou processador se não houver). O vídeo não sai da sua máquina. Na primeira vez o motor baixa de 120 a 180 MB (fica guardado no navegador). ProRes e recorte com canal alfa: peça no chat, pelo pipeline na nuvem.</p>
+<p class="foot">Tudo roda no seu computador (placa de vídeo pelo WebGPU, ou processador se não houver). O vídeo não sai da sua máquina. Na primeira vez o motor baixa cerca de 100 MB para começar e mais ~170 MB do SAM 2.1 base em segundo plano (fica guardado no navegador). ProRes e recorte com canal alfa: peça no chat, pelo pipeline na nuvem.</p>
 
 <script src="vendor/ort.webgpu.min.js"></script>
 <script src="vendor/mp4box.all.min.js"></script>
@@ -273,6 +273,9 @@ $("#prompt").addEventListener("input", ()=>renderTerms());
 /* ================= motor (download + sessões) ================= */
 /* Carregamento em duas etapas: detector + MobileSAM primeiro (o app fica pronto rápido),
    SAM 2.1 depois, em segundo plano, só com placa de vídeo. Todo passo tem limite de tempo e aparece no topo. */
+// uma inferência por vez: o WebGPU/WASM do navegador não aceita duas sessões rodando juntas
+let ortQ=Promise.resolve();
+function runOrt(sess, feeds){ const p=ortQ.then(()=>sess.run(feeds)); ortQ=p.then(()=>{},()=>{}); return p; }
 function chip(t, cls){ const c=$("#engineChip"); c.textContent=t; c.className="chip "+(cls||""); }
 const withTimeout=(p, ms, what)=>Promise.race([p, sleep(ms).then(()=>{ throw new Error(`${what}: passou de ${Math.round(ms/1000)} s`); })]);
 async function fetchBytes(n, onProgress){
@@ -318,12 +321,13 @@ function loadEngine(){ return engineLoading ||= (async()=>{
   chip("iniciando detector…","warn"); setStatus("Iniciando o detector…");
   let ep; [st.yolo,ep]=await makeSession(y,"o detector"); st.engine=ep;
   st.sess={};
-  const wantSam2 = !st.cutterPicked || $("#cutter").value==="sam2";
+  const picked = st.cutterPicked ? $("#cutter").value : null;
   await loadMobile();
   useCutter("mobile");
   setBar(0); setStatus("Motor pronto.");
   // com placa de vídeo, o SAM 2.1 vem em seguida sem travar nada
-  if(ep==="webgpu" && wantSam2) upgradeSam2().catch(e=>console.warn(e));
+  if(!picked) autoUpgrade().catch(e=>console.warn(e));
+  else if(picked!=="mobile"){ st.cutterWant=picked; upgradeSam2(picked).catch(e=>console.warn(e)); }
 })().catch(e=>{ engineLoading=null; chip("motor com erro","warn"); throw e; }); }
 async function loadMobile(){
   if(st.sess.mobile) return;
@@ -340,6 +344,12 @@ const SAM2_SETS={ sam2:{enc16:"sam2_enc16",enc32:"sam2_enc32",dec:"sam2_dec",nam
                   sam2s:{enc16:"sam2s_enc16",enc32:"sam2s_enc32",dec:"sam2s_dec",name:"SAM 2.1 small"},
                   sam2b:{enc16:"sam2b_enc16",enc32:null,dec:"sam2b_dec",name:"SAM 2.1 base"} };
 const samLoading={};
+// padrão: base; se não rodar, small; depois tiny. Sem placa de vídeo, fica no MobileSAM (o usuário pode escolher outro).
+async function autoUpgrade(){
+  if(st.engine!=="webgpu"){ return; }
+  const order = (await gpuHasF16()) ? ["sam2b","sam2s","sam2"] : ["sam2s","sam2"];
+  for(const k of order){ if(st.cutterPicked) return; st.autoKind=k; if(await upgradeSam2(k)) return; }
+}
 function upgradeSam2(kind="sam2"){ return samLoading[kind] ||= (async()=>{
   const set=SAM2_SETS[kind], nm=set.name;
   const bg=(label,f)=>chip(`${st.cutter==="mobile"?"MobileSAM":SAM2_SETS[st.cutter]?.name||""} pronto · ${nm} baixando ${Math.round(f*100)}%`,"on");
@@ -353,18 +363,18 @@ function upgradeSam2(kind="sam2"){ return samLoading[kind] ||= (async()=>{
     const [enc]=await makeSession(e,nm,eps), [dec]=await makeSession(d,nm,eps);
     chip(`testando ${nm}…`,"on");
     const t0=performance.now();
-    await withTimeout(enc.run({image:new ort.Tensor("float32", new Float32Array(3*SAMS*SAMS), [1,3,SAMS,SAMS])}), gpu?30000:120000, `Teste do ${nm}`);
+    await withTimeout(runOrt(enc,{image:new ort.Tensor("float32", new Float32Array(3*SAMS*SAMS), [1,3,SAMS,SAMS])}), gpu?30000:120000, `Teste do ${nm}`);
     const ms=Math.round(performance.now()-t0); console.log(nm,"teste",ms,"ms");
     st.sess[kind]={enc,dec,ms};
     while(st.running||busy) await sleep(500);
-    if((!st.cutterPicked && kind==="sam2") || st.cutterWant===kind){ useCutter(kind);
+    if((!st.cutterPicked && st.autoKind===kind) || st.cutterWant===kind){ useCutter(kind);
       if(st.ref){ busy=true; try{ await resegAll(); renderObjs(); drawCurrent(); } finally{ busy=false; } }
       setStatus(`${nm} ativo (${ms} ms por recorte neste computador).`); }
     return true;
   }catch(e){
     console.warn(nm, e); delete samLoading[kind]; st.sam2Error=e.message;
     if(st.cutter!==kind){ $("#cutter").value=st.cutter||"mobile"; chip(engineLabel(),"on"); }
-    setStatus(`${nm} não ficou disponível aqui (${e.message}). Seguindo com o ${st.cutter==="mobile"?"MobileSAM":SAM2_SETS[st.cutter]?.name}.`);
+    setStatus(`${nm} não ficou disponível aqui (${e.message}). ${!st.cutterPicked && st.autoKind===kind && kind!=="sam2" ? "Tentando um tamanho menor…" : "Seguindo com o "+(st.cutter==="mobile"?"MobileSAM":SAM2_SETS[st.cutter]?.name)+"."}`);
     return false;
   }
 })(); }
@@ -423,7 +433,7 @@ async function detect(cv, W, H, terms, conf){
   lbX.fillStyle="rgb(114,114,114)"; lbX.fillRect(0,0,S,S); lbX.imageSmoothingQuality="high"; lbX.drawImage(cv.fc,0,0,W,H,px,py,nw,nh);
   const d=lbX.getImageData(0,0,S,S).data, x=new Float32Array(3*S*S), A=S*S;
   for(let i=0,p=0;i<A;i++,p+=4){ x[i]=d[p]/255; x[A+i]=d[p+1]/255; x[2*A+i]=d[p+2]/255; }
-  const r=await st.yolo.run({images:new ort.Tensor("float32",x,[1,3,S,S]), tpe:st._tpe});
+  const r=await runOrt(st.yolo,{images:new ort.Tensor("float32",x,[1,3,S,S]), tpe:st._tpe});
   const o=r.output0.data, nT=Math.min(terms.length,NSLOT), dets=[];
   for(let a=0;a<NA;a++){ let bk=-1,bs=conf; for(let k=0;k<nT;k++){ const sc=o[(4+k)*NA+a]; if(sc>bs){ bs=sc; bk=k; } } if(bk<0) continue;
     const cx=o[a],cy=o[NA+a],w=o[2*NA+a],h=o[3*NA+a]; dets.push({k:bk,conf:bs,b:[(cx-w/2-px)/s,(cy-h/2-py)/s,(cx+w/2-px)/s,(cy+h/2-py)/s]}); }
@@ -441,7 +451,7 @@ async function samEncode(cv, rect){
   samX.drawImage(cv.fc, rect.x, rect.y, rect.w, rect.h, 0, 0, nw, nh);
   const d=samX.getImageData(0,0,SAMS,SAMS).data, A=SAMS*SAMS, x=new Float32Array(3*A);
   for(let i=0,p=0;i<A;i++,p+=4){ x[i]=(d[p]-SAM_MEAN[0])/SAM_STD[0]; x[A+i]=(d[p+1]-SAM_MEAN[1])/SAM_STD[1]; x[2*A+i]=(d[p+2]-SAM_MEAN[2])/SAM_STD[2]; }
-  const r=await st.enc.run({image:new ort.Tensor("float32",x,[1,3,SAMS,SAMS])});
+  const r=await runOrt(st.enc,{image:new ort.Tensor("float32",x,[1,3,SAMS,SAMS])});
   return {emb:r.emb, s0:r.s0, s1:r.s1, rect, s, nw, nh};
 }
 async function samDecode(E, prompts, maskIn, small){
@@ -450,7 +460,7 @@ async function samDecode(E, prompts, maskIn, small){
   const feeds={emb:E.emb, coords:new ort.Tensor("float32",co,[1,NP,2]), labels:new ort.Tensor("float32",la,[1,NP]),
     mask_in:new ort.Tensor("float32", maskIn||new Float32Array(65536), [1,1,256,256]), has_mask:new ort.Tensor("float32", new Float32Array([maskIn?1:0]), [1])};
   if(E.s0){ feeds.s0=E.s0; feeds.s1=E.s1; }
-  const r=await st.dec.run(feeds);
+  const r=await runOrt(st.dec,feeds);
   if(r.obj && r.obj.data[0] < 0) return {logits:new Float32Array(65536).fill(-20), score:0, gone:true}; // SAM 2: o objeto não está neste frame
   const m=r.masks.data, iou=r.iou.data;
   const hasBox=prompts.some(p=>p.l===2), nPts=prompts.filter(p=>p.l===0||p.l===1).length;
