@@ -72,6 +72,10 @@ input[type=text]{flex:1;min-width:0;font:inherit;font-size:15px;color:var(--fg);
 .ctl{display:grid;grid-template-columns:130px minmax(0,1fr) 54px;gap:8px;align-items:center;font-size:13px}
 .ctl output{font-family:var(--mono);font-size:12px;text-align:right;color:var(--mute)}
 .ctl input[type=range]{width:100%}
+.cnote{margin:-4px 0 2px 138px;font-family:var(--mono);font-size:11.5px}
+.cnote.err{color:var(--bad)}
+.cnote.ok{color:var(--ok)}
+@media (max-width:520px){.cnote{margin-left:0}}
 .ctl select{font:inherit;color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
 label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
 .bar{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
@@ -160,7 +164,8 @@ label.ck{display:flex;gap:8px;align-items:center;font-size:13px}
 
     <section class="p" aria-labelledby="h3">
       <h2 id="h3"><b>03</b> Rastreamento</h2>
-      <div class="ctl"><label for="cutter">Recortador</label><select id="cutter"><option value="sam2">SAM 2.1 tiny · equilíbrio (~70 MB)</option><option value="sam2s">SAM 2.1 small · mais preciso (~100 MB)</option><option value="sam2b" selected>SAM 2.1 base · máximo, só placa de vídeo (~170 MB)</option><option value="mobile">MobileSAM · rápido</option></select><output></output></div>
+      <div class="ctl"><label for="cutter">Recortador</label><select id="cutter"><option value="sam2">SAM 2.1 tiny · equilíbrio (~70 MB)</option><option value="sam2s">SAM 2.1 small · mais preciso (~100 MB)</option><option value="sam2b" selected>SAM 2.1 base · máximo (170–310 MB)</option><option value="mobile">MobileSAM · rápido</option></select><output></output></div>
+      <p class="hint cnote" id="cutterNote" role="status"></p>
       <div class="ctl"><label for="conf">Confiança do texto</label><input type="range" id="conf" min="0.05" max="0.9" step="0.01" value="0.30"><output for="conf"></output></div>
       <div class="ctl"><label for="edge">Colar na imagem</label><input type="range" id="edge" min="0" max="8" step="1" value="0"><output for="edge"></output></div>
       <div class="ctl"><label for="hold">Seguir sem detecção</label><input type="range" id="hold" min="0" max="60" step="1" value="24"><output for="hold"></output></div>
@@ -313,13 +318,14 @@ function loadEngine(){ return engineLoading ||= (async()=>{
   chip("iniciando detector…","warn"); setStatus("Iniciando o detector…");
   let ep; [st.yolo,ep]=await makeSession(y,"o detector"); st.engine=ep;
   st.sess={};
-  const picked = st.cutterPicked ? $("#cutter").value : null;
+  const picked = st.cutterPicked ? $("#cutter").value : null; if(picked) st.cutterWant=picked;
   await loadMobile();
+  if(picked && picked!=="mobile") upgradeSam2(picked).catch(e=>console.warn(e));
   useCutter("mobile");
   setBar(0); setStatus("Motor pronto.");
   // com placa de vídeo, o SAM 2.1 vem em seguida sem travar nada
   if(!picked) autoUpgrade().catch(e=>console.warn(e));
-  else if(picked!=="mobile"){ st.cutterWant=picked; upgradeSam2(picked).catch(e=>console.warn(e)); }
+
 })().catch(e=>{ engineLoading=null; chip("motor com erro","warn"); throw e; }); }
 async function loadMobile(){
   if(st.sess.mobile) return;
@@ -329,36 +335,41 @@ async function loadMobile(){
   st.sess.mobile={enc,dec};
 }
 function engineLabel(){ return (st.engine==="webgpu" ? "placa de vídeo" : `processador${ort.env.wasm.numThreads>1?" ×"+ort.env.wasm.numThreads:""}`) + " · " + (SAM2_SETS[st.cutter]?.name || "MobileSAM"); }
-function useCutter(kind){ const S=st.sess[kind]; if(!S) return false; st.enc=S.enc; st.dec=S.dec; st.cutter=kind; $("#cutter").value=kind; chip(engineLabel(),"on"); return true; }
+function cutterName(k){ return SAM2_SETS[k]?.name || "MobileSAM"; }
+function note(t, cls){ const n=$("#cutterNote"); n.textContent=t; n.className="hint cnote "+(cls||""); }
+function useCutter(kind){ const S=st.sess[kind]; if(!S) return false; st.enc=S.enc; st.dec=S.dec; st.cutter=kind;
+  const pending = st.cutterWant && st.cutterWant!==kind && samLoading[st.cutterWant]; if(!pending) $("#cutter").value=kind; chip(engineLabel(),"on");
+  note(`Ativo: ${cutterName(kind)}${S.ms?` · ${S.ms} ms por recorte`:""}`, "ok"); return true; }
 async function gpuHasF16(){ try{ const a=await navigator.gpu?.requestAdapter(); return !!a && a.features.has("shader-f16"); }catch(e){ return false; } }
 // SAM 2.1 em três tamanhos: tiny (rápido), small (mais preciso), base (máximo; só placa de vídeo com fp16)
 const SAM2_SETS={ sam2:{enc16:"sam2_enc16",enc32:"sam2_enc32",dec:"sam2_dec",name:"SAM 2.1 tiny"},
                   sam2s:{enc16:"sam2s_enc16",enc32:"sam2s_enc32",dec:"sam2s_dec",name:"SAM 2.1 small"},
-                  sam2b:{enc16:"sam2b_enc16",enc32:null,dec:"sam2b_dec",name:"SAM 2.1 base"} };
+                  sam2b:{enc16:"sam2b_enc16",enc32:"sam2b_enc32",dec:"sam2b_dec",name:"SAM 2.1 base"} };
 const samLoading={};
 // padrão: base; se não rodar, small; depois tiny. Sem placa de vídeo, fica no MobileSAM (o usuário pode escolher outro).
 async function autoUpgrade(){
   if(st.engine!=="webgpu"){ return; }
-  const order = (await gpuHasF16()) ? ["sam2b","sam2s","sam2"] : ["sam2s","sam2"];
+  const order = ["sam2b","sam2s","sam2"];
   for(const k of order){ if(st.cutterPicked) return; st.autoKind=k; if(await upgradeSam2(k)) return; }
 }
 function upgradeSam2(kind="sam2"){ return samLoading[kind] ||= (async()=>{
   const set=SAM2_SETS[kind], nm=set.name;
-  const bg=(label,f)=>chip(`${st.cutter==="mobile"?"MobileSAM":SAM2_SETS[st.cutter]?.name||""} pronto · ${nm} baixando ${Math.round(f*100)}%`,"on");
+  const bg=(label,f)=>{ chip(`${cutterName(st.cutter)} pronto · ${nm} baixando ${Math.round(f*100)}%`,"on"); note(`${nm}: baixando ${Math.round(f*100)}% · enquanto isso usa o ${cutterName(st.cutter)}`); };
   try{
     const gpu = st.engine==="webgpu", f16=gpu && await gpuHasF16();
     const encName = f16 ? set.enc16 : set.enc32;
     if(!encName) throw new Error(`${nm} precisa de placa de vídeo com suporte a fp16`);
     const e=await fetchParts(st.models[encName],nm,bg), d=await fetchParts(st.models[set.dec],nm,bg);
-    chip(`iniciando ${nm}…`,"on");
+    chip(`iniciando ${nm}…`,"on"); note(`${nm}: iniciando…`);
     const eps = gpu? ["webgpu"] : ["wasm"];
     const [enc]=await makeSession(e,nm,eps), [dec]=await makeSession(d,nm,eps);
-    chip(`testando ${nm}…`,"on");
+    chip(`testando ${nm}…`,"on"); note(`${nm}: testando a velocidade…`);
     const t0=performance.now();
-    await withTimeout(runOrt(enc,{image:new ort.Tensor("float32", new Float32Array(3*SAMS*SAMS), [1,3,SAMS,SAMS])}), gpu?30000:120000, `Teste do ${nm}`);
+    await withTimeout(runOrt(enc,{image:new ort.Tensor("float32", new Float32Array(3*SAMS*SAMS), [1,3,SAMS,SAMS])}), gpu?90000:120000, `Teste do ${nm}`);
     const ms=Math.round(performance.now()-t0); console.log(nm,"teste",ms,"ms");
     st.sess[kind]={enc,dec,ms};
     while(st.running||busy) await sleep(500);
+    if(!((!st.cutterPicked && st.autoKind===kind) || st.cutterWant===kind)) note(`${nm} pronto (${ms} ms). Escolha no menu para usar.`);
     if((!st.cutterPicked && st.autoKind===kind) || st.cutterWant===kind){ useCutter(kind);
       if(st.ref){ busy=true; try{ await resegAll(); renderObjs(); drawCurrent(); } finally{ busy=false; } }
       setStatus(`${nm} ativo (${ms} ms por recorte neste computador).`); }
@@ -366,6 +377,7 @@ function upgradeSam2(kind="sam2"){ return samLoading[kind] ||= (async()=>{
   }catch(e){
     console.warn(nm, e); delete samLoading[kind]; st.sam2Error=e.message;
     if(st.cutter!==kind){ $("#cutter").value=st.cutter||"mobile"; chip(engineLabel(),"on"); }
+    note(`${nm} não rodou aqui: ${e.message}. Ativo: ${cutterName(st.cutter)}.`, "err");
     setStatus(`${nm} não ficou disponível aqui (${e.message}). ${!st.cutterPicked && st.autoKind===kind && kind!=="sam2" ? "Tentando um tamanho menor…" : "Seguindo com o "+(st.cutter==="mobile"?"MobileSAM":SAM2_SETS[st.cutter]?.name)+"."}`);
     return false;
   }
@@ -732,12 +744,12 @@ async function reseg(o){ const ref=st.ref; o.prev=null; await segmentObject(ref.
   // segunda passada com a própria máscara como guia: borda mais estável
   await segmentObject(ref.cv, ref.W, ref.H, o, readParams(), null); makeOverlay(o, view.width/ref.W); drawCurrent(); }
 $("#cutter").addEventListener("change", ()=>{ st.cutterPicked=true; const want=$("#cutter").value; st.cutterWant=want;
-  if(!engineLoading){ return; }
+  if(!engineLoading){ note(`${cutterName(want)} será carregado ao analisar o primeiro frame.`); return; }
   if(want==="mobile"){ if(useCutter("mobile") && st.ref) guarded(async()=>{ await resegAll(); renderObjs(); drawCurrent(); }); return; }
   if(st.sess && st.sess[want]){ if(useCutter(want) && st.ref) guarded(async()=>{ await resegAll(); renderObjs(); drawCurrent(); }); return; }
   const nm=SAM2_SETS[want].name;
   setStatus(st.engine && st.engine!=="webgpu" ? `Baixando o ${nm}. Sem placa de vídeo ele leva vários segundos por objeto em cada frame; você pode continuar com o recortador atual enquanto isso.` : `Baixando o ${nm} em segundo plano. Você pode continuar usando o app.`);
-  $("#cutter").value=st.cutter||"mobile"; upgradeSam2(want); });
+  note(`${nm}: preparando…`); upgradeSam2(want); });
 $("#testBtn").onclick=async()=>{ if(st.running) return; try{ await analyze(); }catch(e){ setStatus(e.message); console.error(e); } };
 
 function renderObjs(){

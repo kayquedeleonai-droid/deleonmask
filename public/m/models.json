@@ -39,6 +39,30 @@
   "m/sam2b_enc16.part9.wasm",
   "m/sam2b_enc16.part10.wasm"
  ],
+ "sam2b_enc32": [
+  "m/sam2b_enc32.part0.wasm",
+  "m/sam2b_enc32.part1.wasm",
+  "m/sam2b_enc32.part2.wasm",
+  "m/sam2b_enc32.part3.wasm",
+  "m/sam2b_enc32.part4.wasm",
+  "m/sam2b_enc32.part5.wasm",
+  "m/sam2b_enc32.part6.wasm",
+  "m/sam2b_enc32.part7.wasm",
+  "m/sam2b_enc32.part8.wasm",
+  "m/sam2b_enc32.part9.wasm",
+  "m/sam2b_enc32.part10.wasm",
+  "m/sam2b_enc32.part11.wasm",
+  "m/sam2b_enc32.part12.wasm",
+  "m/sam2b_enc32.part13.wasm",
+  "m/sam2b_enc32.part14.wasm",
+  "m/sam2b_enc32.part15.wasm",
+  "m/sam2b_enc32.part16.wasm",
+  "m/sam2b_enc32.part17.wasm",
+  "m/sam2b_enc32.part18.wasm",
+  "m/sam2b_enc32.part19.wasm",
+  "m/sam2b_enc32.part20.wasm",
+  "m/sam2b_enc32.part21.wasm"
+ ],
  "sam2s_dec": [
   "m/sam2s_dec.part0.wasm",
   "m/sam2s_dec.part1.wasm"
