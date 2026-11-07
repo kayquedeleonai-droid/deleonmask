@@ -146,6 +146,25 @@ input[type=range]{width:100%;accent-color:var(--matte)}
 .checks div::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none;transform:translateY(-1px)}
 .checks .n::before{background:var(--warn)}
 .empty{color:var(--mute);font-size:12.5px;padding:8px 2px}
+.brushbar{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink2)}
+.brushbar input{width:200px;flex:none}
+.brushbar output{font-family:var(--mono);font-size:12px;color:var(--mute);width:56px}
+#compareBtn[aria-pressed=true]{background:var(--matte);color:var(--matte-ink);border-color:var(--matte)}
+.score{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;background:var(--sunk);border-radius:var(--r-m);padding:14px}
+.score .big{display:flex;align-items:baseline;gap:2px}
+.score .big b{font-size:40px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1}
+.score .big span{color:var(--mute);font-size:13px}
+.crit{display:grid;gap:6px;min-width:0}
+.crit div{display:grid;grid-template-columns:96px minmax(0,1fr) 34px;gap:8px;align-items:center;font-size:12px;color:var(--ink2)}
+.crit i{display:block;height:5px;border-radius:9px;background:var(--raise);overflow:hidden}
+.crit i b{display:block;height:100%;border-radius:9px}
+.crit em{font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--mute);text-align:right}
+.delta{font-size:12px;color:var(--ok);margin-top:4px}
+.worst{display:grid;grid-template-columns:52px 34px minmax(0,1fr);gap:8px;align-items:center;padding:6px 8px;border-radius:var(--r-s);font-size:12.5px;cursor:pointer;border:0;background:transparent;text-align:left;width:100%}
+.worst:hover{background:var(--raise)}
+.worst b{font-family:var(--mono);font-weight:500;font-size:12px}
+.worst em{font-style:normal;font-family:var(--mono);font-size:11.5px}
+.worst span{color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
 </style>
 
@@ -153,7 +172,7 @@ input[type=range]{width:100%;accent-color:var(--matte)}
   <header class="top">
     <div class="brand"><span class="mark" aria-hidden="true"></span>DeLeon Mask</div>
     <ol class="steps" id="steps">
-      <li data-step="video">Vídeo</li><li data-step="mark">Marcar</li><li data-step="track">Rastrear</li><li data-step="export">Exportar</li>
+      <li data-step="video">Vídeo</li><li data-step="mark">Marcar</li><li data-step="track">Rastrear</li><li data-step="refine">Refinar</li><li data-step="export">Exportar</li>
     </ol>
     <div class="grow"></div>
     <span class="pill" id="engineChip">Motor desligado</span>
@@ -169,6 +188,10 @@ input[type=range]{width:100%;accent-color:var(--matte)}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M8 12h8"/></svg>Pin −</button>
     <button class="tool" data-tool="box" aria-pressed="false" title="Caixa (B): objeto novo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2.4"><rect x="4" y="5" width="16" height="14" rx="1.5"/></svg>Caixa</button>
+    <button class="tool" data-tool="bplus" aria-pressed="false" title="Pincel + (G): pinte o que deve entrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14.5 4.5l5 5L10 19l-5.5 1 1-5.5z"/><circle cx="18.5" cy="18.5" r="2.2" fill="#4ed69a" stroke="none"/></svg>Pincel +</button>
+    <button class="tool" data-tool="bminus" aria-pressed="false" title="Pincel − (R): pinte o que deve sair">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14.5 4.5l5 5L10 19l-5.5 1 1-5.5z"/><circle cx="18.5" cy="18.5" r="2.2" fill="#ff5a4e" stroke="none"/></svg>Pincel −</button>
     <hr>
     <button class="tool" id="undoPin" title="Desfazer (Ctrl+Z)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 010 12"/></svg>Desfazer</button>
@@ -191,9 +214,12 @@ input[type=range]{width:100%;accent-color:var(--matte)}
         <button data-v="orig" aria-pressed="false">Original</button>
         <button data-v="over" aria-pressed="true">Sobreposição</button>
         <button data-v="mask" aria-pressed="false">Máscara</button>
+        <button data-v="edge" aria-pressed="false" title="Contorno da máscara por cima do vídeo">Contorno</button>
       </div>
+      <button class="btn small" id="compareBtn" aria-pressed="false" hidden title="Segure C para ver antes do refino">Antes do refino</button>
     </div>
     <div class="timeline" id="timeline" title="Clique ou arraste para ir a um frame"><canvas id="tl" height="64"></canvas></div>
+    <div class="brushbar" id="brushBar" hidden><span>Tamanho do pincel</span><input type="range" id="brushSize" min="4" max="300" step="1" value="40"><output id="brushOut"></output><span class="hint">[ e ] também mudam o tamanho</span></div>
     <p class="hint" id="toolHint">Vá até um frame onde o objeto aparece inteiro e clique em <b>Analisar este frame</b>. Para corrigir depois, pare em qualquer frame e use os pins.</p>
     <video id="vid" playsinline muted hidden></video>
   </section>
@@ -202,6 +228,7 @@ input[type=range]{width:100%;accent-color:var(--matte)}
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="layers" aria-selected="true">Camadas</button>
       <button role="tab" data-tab="tune" aria-selected="false">Ajustes</button>
+      <button role="tab" data-tab="refine" aria-selected="false">Refino</button>
       <button role="tab" data-tab="export" aria-selected="false">Exportar</button>
     </nav>
 
@@ -252,6 +279,28 @@ input[type=range]{width:100%;accent-color:var(--matte)}
         <div class="ctl"><label for="smooth">Estabilizar</label><input type="range" id="smooth" min="0" max="3" step="1" value="1"><output></output></div>
         <label class="ck"><input type="checkbox" id="hard"> Borda dura (só preto e branco)</label>
         <label class="ck"><input type="checkbox" id="invert"> Inverter (alvo preto, fundo branco)</label>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="refine" hidden>
+      <div class="group">
+        <h3>Qualidade das máscaras</h3>
+        <p class="hint">Confere cada frame contra o vídeo: ilhas soltas, furos, piscadas entre frames e se a borda da máscara acompanha a borda da imagem.</p>
+        <div class="score" id="scoreBox"><div class="big"><b id="scoreNum">–</b><span>/100</span></div><div class="crit" id="scoreCrit"><p class="empty">Gere as máscaras e clique em Analisar.</p></div></div>
+        <div class="row"><button class="btn" id="analyzeBtn" disabled>Analisar máscaras</button></div>
+      </div>
+      <div class="group">
+        <h3>Frames para revisar</h3>
+        <div class="objs" id="worst"><p class="empty">Os piores frames aparecem aqui. Clique para ir até eles e corrigir com o pincel.</p></div>
+      </div>
+      <div class="group">
+        <h3>Limpeza</h3>
+        <div class="ctl"><label for="rIsl">Tirar ilhas menores que</label><input type="range" id="rIsl" min="0" max="20" step="0.5" value="3"><output></output></div>
+        <div class="ctl"><label for="rHole">Fechar furos menores que</label><input type="range" id="rHole" min="0" max="20" step="0.5" value="3"><output></output></div>
+        <div class="ctl"><label for="rBlip">Tirar piscadas</label><input type="range" id="rBlip" min="0" max="4" step="1" value="2"><output></output></div>
+        <div class="ctl"><label for="rSnap">Colar na borda da imagem</label><input type="range" id="rSnap" min="0" max="8" step="1" value="3"><output></output></div>
+        <p class="hint">Ilhas e furos em % da área do objeto. Piscada é um pedaço que aparece ou some por poucos frames enquanto os vizinhos concordam.</p>
+        <div class="row"><button class="btn primary" id="refineBtn" disabled>Aplicar refino</button></div>
       </div>
     </div>
 

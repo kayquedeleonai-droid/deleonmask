@@ -2,7 +2,7 @@
 const view=$("#view"), vctx=view.getContext("2d"), vid=$("#vid");
 let busy=false, drag=null, srcURL=null;
 async function guarded(fn){ if(busy||st.running) return; busy=true; try{ await fn(); }catch(e){ setStatus(e.message); console.error(e); } finally{ busy=false; } }
-function setSteps(now){ const order=["video","mark","track","export"], k=order.indexOf(now); $$("#steps li").forEach((li,i)=>{ li.className = i<k?"done": i===k?"now":""; }); }
+function setSteps(now){ const order=["video","mark","track","refine","export"], k=order.indexOf(now); $$("#steps li").forEach((li,i)=>{ li.className = i<k?"done": i===k?"now":""; }); }
 function uiRunning(on){ $("#runBtn").disabled=on; $("#stopBtn").hidden=!on; $("#stopBtn").disabled=!on; $("#testBtn").disabled=on; $("#finishBtn").disabled=on||!st.run; if(!on) st.stop=false; }
 
 /* ---- abas ---- */
@@ -70,8 +70,10 @@ function curFrame(){ const v=st.video; if(!v) return 0; const t=Math.round((vid.
 function seekFrame(i){ const v=st.video; if(!v) return; vid.pause(); vid.currentTime=(v.ts[clamp(i,0,v.nFrames-1)]-v.ts[0])/1e6+1e-3; }
 let shownFrame=null; function showFrame(i){ shownFrame=i; seekFrame(i); }
 function hexRgb(h){ const n=parseInt(h.slice(1),16); return [n>>16&255,n>>8&255,n&255]; }
+function showingPrev(){ return !!st.outPrev && (compareHeld || $("#compareBtn").getAttribute("aria-pressed")==="true"); }
+let compareHeld=false;
 function overlayCanvas(fi){
-  const O=st.out; if(!O) return null; const tw=O.tw||Math.min(480,st.video.W), th=Math.round(tw*st.video.H/st.video.W);
+  const O=showingPrev()? st.outPrev : st.out; if(!O) return null; if(st.view==="edge") return null; const tw=O.tw||Math.min(480,st.video.W), th=Math.round(tw*st.video.H/st.video.W);
   const c=new OffscreenCanvas(tw,th), x=c.getContext("2d"), img=x.createImageData(tw,th), d=img.data;
   if(st.view==="mask"){ const L=st.layers.length>1? layerById(st.activeLayer) : null; const m=L? O.thumbs[L.id]?.[fi] : O.allThumbs[fi]; if(!m) return null;
     for(let i=0,j=0;i<m.length;i++,j+=4){ d[j]=d[j+1]=d[j+2]=m[i]; d[j+3]=255; } }
@@ -98,7 +100,15 @@ function drawView(){
       hud.push(st.objs.some(o=>o.fb===fi && o.k>=0) ? "Frame analisado" : "Correção neste frame");
     } else { const c=overlayCanvas(fi); if(c) vctx.drawImage(c,0,0,W,H); if(st.view==="mask" && st.out) hud.push(st.layers.length>1? `Máscara: ${layerById(st.activeLayer)?.name}` : "Máscara"); }
   }
+  // traço sendo pintado e cursor do pincel
+  { const sx=W/v.W, sy=H/v.H;
+    if(stroke){ vctx.save(); vctx.globalAlpha=0.45; vctx.strokeStyle=vctx.fillStyle=stroke.sign>0?"#4ed69a":"#ff5a4e"; vctx.lineCap="round"; vctx.lineJoin="round"; vctx.lineWidth=2*stroke.r*sx;
+      vctx.beginPath(); stroke.pts.forEach((q,j)=>j?vctx.lineTo(q.x*sx,q.y*sy):vctx.moveTo(q.x*sx,q.y*sy)); if(stroke.pts.length===1){ vctx.arc(stroke.pts[0].x*sx,stroke.pts[0].y*sy,stroke.r*sx,0,7); vctx.fill(); } else vctx.stroke(); vctx.restore(); }
+    if(hover && (st.tool==="bplus"||st.tool==="bminus")){ const k=view.width/Math.max(1,contentRect().width); vctx.beginPath(); vctx.arc(hover.x*sx,hover.y*sy,brushPx()/2*sx,0,7); vctx.lineWidth=1.5*k; vctx.strokeStyle=st.tool==="bplus"?"#4ed69a":"#ff5a4e"; vctx.stroke(); } }
+  if(st.view==="edge" && !(E && E.fi===fi)) drawEdges(fi);
   if(st.suspects && st.suspects.includes(fi)) hud.push("Revisar este frame");
+  const qf=st.quality?.per?.[fi]; if(qf && st.view!=="orig") hud.push(`Nota ${qf.score}`);
+  if(showingPrev()) hud.push("Antes do refino");
   $("#hud").innerHTML=hud.map(t=>`<span>${t}</span>`).join("");
 }
 vid.addEventListener("seeked",()=>{ drawView(); drawTimeline(); }); vid.addEventListener("loadeddata",drawView);
@@ -124,6 +134,7 @@ function drawTimeline(){
     const cov=st.out?.cov?.[L.id]; if(cov){ const mx=Math.max(1e-6,...cov); const [r,g,b]=hexRgb(L.color);
       for(let i=0;i<N;i++){ const a=cov[i]/mx; if(a<=0) continue; x.fillStyle=`rgba(${r},${g},${b},${0.25+0.75*a})`; x.fillRect(X(i)-Math.max(1,(w-16)/N/2), y, Math.max(1.5,(w-16)/N), 6); } } });
   for(const i of st.suspects||[]){ x.fillStyle="#f2b94b"; x.fillRect(X(i)-1,h-6,2,5); }
+  const Q=st.quality; if(Q) for(const f of Q.per){ if(!f.fg || f.score>=90) continue; x.fillStyle=f.score>=70?"rgba(242,185,75,.9)":"rgba(255,109,109,.95)"; x.fillRect(X(f.i)-Math.max(1,(w-16)/N/2),h-6,Math.max(2,(w-16)/N),5); }
   for(const o of st.objs){ const L=layerById(o.layer); if(!L) continue; const cx=X(o.fb), cy=18; x.fillStyle=L.color; x.beginPath(); x.moveTo(cx,cy-5); x.lineTo(cx+5,cy); x.lineTo(cx,cy+5); x.lineTo(cx-5,cy); x.closePath(); x.fill(); x.strokeStyle="#16171a"; x.lineWidth=1.5; x.stroke(); }
   const pf=curFrame(); x.fillStyle="#f4f3ee"; x.fillRect(Math.round(X(pf))-1,0,2,h);
 }
@@ -178,12 +189,18 @@ function dispAt(p){ let best=null, ba=Infinity; for(const [,dd] of st.edit.disp)
     const b=dd.mb||dd.o.box, inBox=p.x>=b[0]&&p.x<=b[2]&&p.y>=b[1]&&p.y<=b[3];
     if(inside||inBox){ const a=(b[2]-b[0])*(b[3]-b[1])*(inside?0.5:1); if(a<ba){ ba=a; best=dd; } } } return best; }
 async function ensureEdit(){ const fi=curFrame(); if(!st.edit || st.edit.fi!==fi){ await loadEngine(); await openEdit(fi); setSteps("mark"); } return st.edit; }
-const TOOL_HINT={select:"Clique num objeto para ligar ou desligar.", plus:"Clique no que deve entrar. Fora de qualquer objeto, cria um objeto novo na camada ativa.", minus:"Clique no que deve sair. Vale em qualquer frame: a correção segue para frente e para trás.", box:"Arraste uma caixa em volta de um objeto novo (camada ativa). Com Shift, a caixa vira algo a tirar."};
-function setTool(t){ st.tool=t; $$("[data-tool]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tool===t)); $("#toolHint").textContent=TOOL_HINT[t]; view.style.cursor=t==="select"?"default":"crosshair"; }
+const TOOL_HINT={bplus:"Pinte por cima do que deve entrar. O traço se encaixa na borda da imagem e segue pelo vídeo.", bminus:"Pinte por cima do que deve sair. Vale para frente e para trás a partir deste frame.", select:"Clique num objeto para ligar ou desligar.", plus:"Clique no que deve entrar. Fora de qualquer objeto, cria um objeto novo na camada ativa.", minus:"Clique no que deve sair. Vale em qualquer frame: a correção segue para frente e para trás.", box:"Arraste uma caixa em volta de um objeto novo (camada ativa). Com Shift, a caixa vira algo a tirar."};
+function setTool(t){ st.tool=t; $$("[data-tool]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tool===t)); $("#toolHint").textContent=TOOL_HINT[t];
+  const brush=t==="bplus"||t==="bminus"; $("#brushBar").hidden=!brush; view.style.cursor=t==="select"?"default":brush?"none":"crosshair"; drawView(); }
+let stroke=null, hover=null;
+function brushPx(){ return +$("#brushSize").value; }
+$("#brushSize").addEventListener("input",()=>{ $("#brushOut").textContent=$("#brushSize").value+" px"; drawView(); });
+function setBrushDefault(){ const v=st.video; if(!v) return; const d=Math.round(Math.max(8,Math.min(300,v.H*0.035))); $("#brushSize").max=Math.max(60,Math.round(v.H*0.3)); $("#brushSize").value=d; $("#brushOut").textContent=d+" px"; }
 $$("[data-tool]").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
 view.addEventListener("pointerdown",e=>{
   if(!st.video || st.running) return; const p=viewToFrame(e);
   if(st.tool==="box"){ drag={x0:p.x,y0:p.y,x1:p.x,y1:p.y,neg:e.shiftKey}; view.setPointerCapture(e.pointerId); return; }
+  if(st.tool==="bplus"||st.tool==="bminus"){ stroke={pts:[p], r:brushPx()/2, sign:(st.tool==="bplus")!==e.altKey?1:-1}; view.setPointerCapture(e.pointerId); drawView(); return; }
   guarded(async()=>{
     const E=await ensureEdit(), fi=E.fi, v=st.video, sc=view.width/v.W;
     const hit=dispAt(p);
@@ -212,7 +229,33 @@ async function segPiece(E, T){
   else E.disp.set(T.id,{o:r,tpl:T,mask:r.mask,mb:r.mb});
   makeOv(E.disp.get(T.id),sc);
 }
-view.addEventListener("pointermove",e=>{ if(!drag) return; const p=viewToFrame(e); drag.x1=p.x; drag.y1=p.y; drawView(); });
+view.addEventListener("pointermove",e=>{ const p=viewToFrame(e);
+  if(stroke){ const l=stroke.pts[stroke.pts.length-1]; if(Math.hypot(p.x-l.x,p.y-l.y)>stroke.r*0.35){ stroke.pts.push(p); drawView(); } return; }
+  if(st.tool==="bplus"||st.tool==="bminus"){ hover=p; drawView(); }
+  if(!drag) return; drag.x1=p.x; drag.y1=p.y; drawView(); });
+view.addEventListener("pointerleave",()=>{ hover=null; drawView(); });
+view.addEventListener("pointerup",()=>{ if(!stroke) return; const S=stroke; stroke=null;
+  guarded(async()=>{ const E=await ensureEdit(), v=st.video;
+    // o objeto que o traço mais cobre vira o "dono"; sem dono, verde cria um objeto novo na camada ativa
+    const votes=new Map(); for(const q of S.pts){ const h=dispAt(q); if(h) votes.set(h,(votes.get(h)||0)+1); }
+    let hit=null, best=0; for(const [h,c] of votes) if(c>best){ best=c; hit=h; }
+    if(!hit && S.sign<0){ setStatus("Pincel − precisa passar por cima de um objeto."); drawView(); return; }
+    const parent=hit?hit.o:null, layer=parent?parent.layer:st.activeLayer, sb=strokeBox(S,v.W,v.H);
+    const T={id:"s"+(st.nextId++), layer, k:-1, sign:S.sign, label: parent?(S.sign>0?`pincel + em ${parent.label}`:`pincel − em ${parent.label}`):`pincel em ${layerById(layer)?.name||"camada"}`,
+      active:true, fb:E.fi, parent:parent?parent.id:null, box:sb, pins:[], stroke:{pts:S.pts.map(q=>({x:q.x,y:q.y})), r:S.r}};
+    setStatus("Encaixando o traço na imagem…"); await segBrush(E,T);
+    st.objs.push(T); st.history.push({o:T,kind:"obj"}); renderObjs(); drawTimeline(); drawView();
+    setStatus(`${S.sign>0?"Pincel +":"Pincel −"} no frame ${E.fi}. Segue para frente e para trás quando você gerar.`); });
+});
+async function segBrush(E, T){
+  const v=st.video, P=readParams(), sc=view.width/v.W;
+  // pontos ao longo do traço + caixa do traço + o traço como máscara inicial
+  const samples=strokeSamples(T.stroke,5), bw=Math.max(1,T.box[2]-T.box[0]), bh=Math.max(1,T.box[3]-T.box[1]);
+  T.pins=samples.map(q=>({u:(q.x-T.box[0])/bw, v:(q.y-T.box[1])/bh, l:1}));
+  const r=runtime(T); const Enc=await samEncode(E.cv, cropRect(T.box,v.W,v.H,0.35)); await segmentObject(E.cv,v.W,v.H,r,P,Enc);
+  if(r.mb){ const nb=r.mb.slice(), nw=Math.max(1,nb[2]-nb[0]), nh=Math.max(1,nb[3]-nb[1]); T.box=nb; T.pins=samples.map(q=>({u:(q.x-nb[0])/nw, v:(q.y-nb[1])/nh, l:1})); }
+  const dd={o:r,tpl:T,mask:r.mask,mb:r.mb}; makeOv(dd,sc); E.disp.set(T.id,dd);
+}
 view.addEventListener("pointerup",()=>{ if(!drag) return; const d=drag; drag=null;
   const b=[Math.min(d.x0,d.x1),Math.min(d.y0,d.y1),Math.max(d.x0,d.x1),Math.max(d.y0,d.y1)]; if(b[2]-b[0]<8||b[3]-b[1]<8){ drawView(); return; }
   guarded(async()=>{ const E=await ensureEdit(), v=st.video; const L=layerById(st.activeLayer);
@@ -245,7 +288,7 @@ async function useFile(file){
     fitView(v.W,v.H); $("#fileName").textContent=file.name;
     $("#meta").innerHTML=[["Resolução",`${v.W}×${v.H}`],["Frames",v.nFrames],["FPS",v.fps.toFixed(3)],["Duração",v.dur.toFixed(2)+" s"],["Codec",v.codec.split(".")[0]],["Rotação",v.rot+"°"]]
       .map(([k,x])=>`<div><small>${k}</small><span>${x}</span></div>`).join("");
-    $("#viewMsg").hidden=true; renderAll(); setSteps("video");
+    $("#viewMsg").hidden=true; st.quality=null; st.outPrev=null; st.refine=null; edgeCache.clear(); $("#compareBtn").hidden=true; setBrushDefault(); renderAll(); renderQuality(); setSteps("video");
     setStatus(`${v.nFrames} frames prontos. Vá até um frame onde o objeto aparece inteiro e clique em Analisar este frame.`);
   }catch(e){ setStatus(e.message); $("#viewMsg").textContent=e.message; console.error(e); }
 }
@@ -275,3 +318,53 @@ document.addEventListener("keydown",e=>{
   else if(k==="v") setTool("select"); else if(k==="a") setTool("plus"); else if(k==="s") setTool("minus"); else if(k==="b") setTool("box");
 });
 window.__dlm={st, analyze, runAll, assemble, viewToFrame, contentRect, seekFrame, curFrame};
+
+/* ---- vista Contorno: a borda da máscara (resolução cheia) por cima do vídeo ---- */
+const edgeCache=new Map();
+function drawEdges(fi){
+  const O=showingPrev()? st.outPrev : st.out; if(!O) return; const v=st.video, W=view.width, H=view.height;
+  const key=(showingPrev()?"p":"n")+fi+":"+W;
+  const paint=(c)=>vctx.drawImage(c,0,0,W,H);
+  if(edgeCache.has(key)){ paint(edgeCache.get(key)); return; }
+  if(!vid.paused){ // tocando: usa as miniaturas
+    for(const L of st.layers){ if(!L.on) continue; const m=O.thumbs[L.id]?.[fi]; if(!m) continue; paint(edgeFrom(m,O.tw,O.th,L.color,1)); } return; }
+  (async()=>{ const c=new OffscreenCanvas(W,H), x=c.getContext("2d");
+    for(const L of st.layers){ if(!L.on) continue; const b=O.png[L.id]?.[fi]; if(!b) continue; const bm=await createImageBitmap(b,{resizeWidth:W,resizeHeight:H}); const t=new OffscreenCanvas(W,H), tx=t.getContext("2d",{willReadFrequently:true}); tx.drawImage(bm,0,0); bm.close();
+      const d=tx.getImageData(0,0,W,H).data, m=new Uint8Array(W*H); for(let i=0,j=0;i<m.length;i++,j+=4) m[i]=$("#invert").checked?255-d[j]:d[j]; x.drawImage(edgeFrom(m,W,H,L.color,Math.max(1,Math.round(W/900))),0,0); }
+    edgeCache.set(key,c); if(edgeCache.size>40) edgeCache.delete(edgeCache.keys().next().value); if(curFrame()===fi) drawView(); })();
+}
+function edgeFrom(m, w, h, color, thick){
+  const c=new OffscreenCanvas(w,h), x=c.getContext("2d"), img=x.createImageData(w,h), [r,g,b]=hexRgb(color), t=thick||1;
+  for(let y=t;y<h-t;y++) for(let xx=t;xx<w-t;xx++){ const i=y*w+xx, on=m[i]>=128; if(!on) continue;
+    if(m[i-t]<128||m[i+t]<128||m[i-t*w]<128||m[i+t*w]<128){ for(let dy=0;dy<t;dy++) for(let dx=0;dx<t;dx++){ const j=((y+dy)*w+xx+dx)*4; img.data[j]=r; img.data[j+1]=g; img.data[j+2]=b; img.data[j+3]=255; } } }
+  x.putImageData(img,0,0); return c;
+}
+
+/* ---- painel de refino ---- */
+function renderQuality(){
+  const Q=st.quality, box=$("#scoreCrit"); $("#analyzeBtn").disabled=!st.out; $("#refineBtn").disabled=!st.run;
+  if(!Q){ $("#scoreNum").textContent="–"; return; }
+  $("#scoreNum").textContent=Q.score;
+  const col=v=>v>=85?"var(--ok)":v>=65?"var(--warn)":"var(--bad)";
+  const row=(name,pen,max)=>{ const v=Math.round(100-100*pen/max); return `<div><span>${name}</span><i><b style="width:${v}%;background:${col(v)}"></b></i><em>${v}</em></div>`; };
+  box.innerHTML=row("Ilhas soltas",Q.isl,25)+row("Furos",Q.hole,15)+row("Piscadas",Q.blip,35)+row("Borda × imagem",Q.edge,25)
+    +(st.prevScore!=null && st.out?.refined ? `<p class="delta">Antes do refino: ${st.prevScore} → agora ${Q.score}</p>`:"");
+  const w=$("#worst"); w.textContent="";
+  const worst=[...Q.per].filter(f=>f.fg).sort((a,b)=>a.score-b.score).slice(0,12);
+  if(!worst.length || worst[0].score>=95){ w.innerHTML='<p class="empty">Nenhum frame com problema relevante.</p>'; return; }
+  for(const f of worst){ if(f.score>=95) break; const why=[]; if(f.pBlip>3) why.push("piscada"); if(f.pIsl>3) why.push("ilhas"); if(f.pHole>2) why.push("furos"); if(f.pEdge>3) why.push("borda fora da imagem");
+    const b=document.createElement("button"); b.className="worst"; b.innerHTML=`<b>frame ${f.i}</b><em style="color:${col(f.score)}">${f.score}</em><span>${why.join(", ")||"pequenos desvios"}</span>`; b.onclick=()=>seekFrame(f.i); w.append(b); }
+}
+$("#analyzeBtn").onclick=()=>guarded(async()=>{ setStatus("Analisando a qualidade…"); const r=await analyzeAll(); if(r) setStatus(`Nota média ${r.score}/100. Veja os frames para revisar no painel Refino.`); });
+$("#refineBtn").onclick=()=>{ if(st.running||busy||!st.run) return;
+  st.prevScore=st.quality?.score ?? null; st.outPrev=st.out; edgeCache.clear();
+  st.refine={isl:+$("#rIsl").value, hole:+$("#rHole").value, blip:+$("#rBlip").value, snap:+$("#rSnap").value};
+  $("#compareBtn").hidden=false;
+  assemble().then(()=>{ const q=st.quality?.score; setStatus(`Refino aplicado. Nota ${st.prevScore??"–"} → ${q??"–"}. Segure C (ou o botão “Antes do refino”) para comparar.`); renderQuality(); }).catch(e=>{ setStatus(e.message); console.error(e); }); };
+$("#compareBtn").onclick=()=>{ const b=$("#compareBtn"); b.setAttribute("aria-pressed", b.getAttribute("aria-pressed")!=="true"); edgeCache.clear(); drawView(); };
+for(const id of ["rIsl","rHole","rBlip","rSnap"]){ const el=$("#"+id), out=el.nextElementSibling; const fmt=()=>{ out.textContent= id==="rBlip"?(+el.value?"±"+el.value+" fr":"off") : id==="rSnap"?(+el.value?el.value+" px":"off") : (+el.value?el.value+"%":"off"); }; el.addEventListener("input",fmt); fmt(); }
+document.addEventListener("keydown",e=>{ if(e.target.closest("input,select,textarea")) return; const k=e.key.toLowerCase();
+  if(k==="c" && st.outPrev && !compareHeld){ compareHeld=true; edgeCache.clear(); drawView(); }
+  else if(k==="g") setTool("bplus"); else if(k==="r") setTool("bminus");
+  else if(k==="[" || k==="]"){ const el=$("#brushSize"); el.value=clamp(+el.value*(k==="]"?1.2:1/1.2),+el.min,+el.max)|0; el.dispatchEvent(new Event("input")); } });
+document.addEventListener("keyup",e=>{ if(e.key.toLowerCase()==="c" && compareHeld){ compareHeld=false; edgeCache.clear(); drawView(); } });

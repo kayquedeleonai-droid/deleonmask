@@ -152,6 +152,25 @@ input[type=range]{width:100%;accent-color:var(--matte)}
 .checks div::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok);flex:none;transform:translateY(-1px)}
 .checks .n::before{background:var(--warn)}
 .empty{color:var(--mute);font-size:12.5px;padding:8px 2px}
+.brushbar{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink2)}
+.brushbar input{width:200px;flex:none}
+.brushbar output{font-family:var(--mono);font-size:12px;color:var(--mute);width:56px}
+#compareBtn[aria-pressed=true]{background:var(--matte);color:var(--matte-ink);border-color:var(--matte)}
+.score{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;background:var(--sunk);border-radius:var(--r-m);padding:14px}
+.score .big{display:flex;align-items:baseline;gap:2px}
+.score .big b{font-size:40px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1}
+.score .big span{color:var(--mute);font-size:13px}
+.crit{display:grid;gap:6px;min-width:0}
+.crit div{display:grid;grid-template-columns:96px minmax(0,1fr) 34px;gap:8px;align-items:center;font-size:12px;color:var(--ink2)}
+.crit i{display:block;height:5px;border-radius:9px;background:var(--raise);overflow:hidden}
+.crit i b{display:block;height:100%;border-radius:9px}
+.crit em{font-style:normal;font-family:var(--mono);font-size:11.5px;color:var(--mute);text-align:right}
+.delta{font-size:12px;color:var(--ok);margin-top:4px}
+.worst{display:grid;grid-template-columns:52px 34px minmax(0,1fr);gap:8px;align-items:center;padding:6px 8px;border-radius:var(--r-s);font-size:12.5px;cursor:pointer;border:0;background:transparent;text-align:left;width:100%}
+.worst:hover{background:var(--raise)}
+.worst b{font-family:var(--mono);font-weight:500;font-size:12px}
+.worst em{font-style:normal;font-family:var(--mono);font-size:11.5px}
+.worst span{color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (prefers-reduced-motion:reduce){ *{animation:none!important;transition:none!important} }
 </style>
 </head>
@@ -162,7 +181,7 @@ input[type=range]{width:100%;accent-color:var(--matte)}
   <header class="top">
     <div class="brand"><span class="mark" aria-hidden="true"></span>DeLeon Mask</div>
     <ol class="steps" id="steps">
-      <li data-step="video">Vídeo</li><li data-step="mark">Marcar</li><li data-step="track">Rastrear</li><li data-step="export">Exportar</li>
+      <li data-step="video">Vídeo</li><li data-step="mark">Marcar</li><li data-step="track">Rastrear</li><li data-step="refine">Refinar</li><li data-step="export">Exportar</li>
     </ol>
     <div class="grow"></div>
     <span class="pill" id="engineChip">Motor desligado</span>
@@ -178,6 +197,10 @@ input[type=range]{width:100%;accent-color:var(--matte)}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M8 12h8"/></svg>Pin −</button>
     <button class="tool" data-tool="box" aria-pressed="false" title="Caixa (B): objeto novo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2.4"><rect x="4" y="5" width="16" height="14" rx="1.5"/></svg>Caixa</button>
+    <button class="tool" data-tool="bplus" aria-pressed="false" title="Pincel + (G): pinte o que deve entrar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14.5 4.5l5 5L10 19l-5.5 1 1-5.5z"/><circle cx="18.5" cy="18.5" r="2.2" fill="#4ed69a" stroke="none"/></svg>Pincel +</button>
+    <button class="tool" data-tool="bminus" aria-pressed="false" title="Pincel − (R): pinte o que deve sair">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14.5 4.5l5 5L10 19l-5.5 1 1-5.5z"/><circle cx="18.5" cy="18.5" r="2.2" fill="#ff5a4e" stroke="none"/></svg>Pincel −</button>
     <hr>
     <button class="tool" id="undoPin" title="Desfazer (Ctrl+Z)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 010 12"/></svg>Desfazer</button>
@@ -200,9 +223,12 @@ input[type=range]{width:100%;accent-color:var(--matte)}
         <button data-v="orig" aria-pressed="false">Original</button>
         <button data-v="over" aria-pressed="true">Sobreposição</button>
         <button data-v="mask" aria-pressed="false">Máscara</button>
+        <button data-v="edge" aria-pressed="false" title="Contorno da máscara por cima do vídeo">Contorno</button>
       </div>
+      <button class="btn small" id="compareBtn" aria-pressed="false" hidden title="Segure C para ver antes do refino">Antes do refino</button>
     </div>
     <div class="timeline" id="timeline" title="Clique ou arraste para ir a um frame"><canvas id="tl" height="64"></canvas></div>
+    <div class="brushbar" id="brushBar" hidden><span>Tamanho do pincel</span><input type="range" id="brushSize" min="4" max="300" step="1" value="40"><output id="brushOut"></output><span class="hint">[ e ] também mudam o tamanho</span></div>
     <p class="hint" id="toolHint">Vá até um frame onde o objeto aparece inteiro e clique em <b>Analisar este frame</b>. Para corrigir depois, pare em qualquer frame e use os pins.</p>
     <video id="vid" playsinline muted hidden></video>
   </section>
@@ -211,6 +237,7 @@ input[type=range]{width:100%;accent-color:var(--matte)}
     <nav class="tabs" role="tablist">
       <button role="tab" data-tab="layers" aria-selected="true">Camadas</button>
       <button role="tab" data-tab="tune" aria-selected="false">Ajustes</button>
+      <button role="tab" data-tab="refine" aria-selected="false">Refino</button>
       <button role="tab" data-tab="export" aria-selected="false">Exportar</button>
     </nav>
 
@@ -261,6 +288,28 @@ input[type=range]{width:100%;accent-color:var(--matte)}
         <div class="ctl"><label for="smooth">Estabilizar</label><input type="range" id="smooth" min="0" max="3" step="1" value="1"><output></output></div>
         <label class="ck"><input type="checkbox" id="hard"> Borda dura (só preto e branco)</label>
         <label class="ck"><input type="checkbox" id="invert"> Inverter (alvo preto, fundo branco)</label>
+      </div>
+    </div>
+
+    <div class="pane" data-pane="refine" hidden>
+      <div class="group">
+        <h3>Qualidade das máscaras</h3>
+        <p class="hint">Confere cada frame contra o vídeo: ilhas soltas, furos, piscadas entre frames e se a borda da máscara acompanha a borda da imagem.</p>
+        <div class="score" id="scoreBox"><div class="big"><b id="scoreNum">–</b><span>/100</span></div><div class="crit" id="scoreCrit"><p class="empty">Gere as máscaras e clique em Analisar.</p></div></div>
+        <div class="row"><button class="btn" id="analyzeBtn" disabled>Analisar máscaras</button></div>
+      </div>
+      <div class="group">
+        <h3>Frames para revisar</h3>
+        <div class="objs" id="worst"><p class="empty">Os piores frames aparecem aqui. Clique para ir até eles e corrigir com o pincel.</p></div>
+      </div>
+      <div class="group">
+        <h3>Limpeza</h3>
+        <div class="ctl"><label for="rIsl">Tirar ilhas menores que</label><input type="range" id="rIsl" min="0" max="20" step="0.5" value="3"><output></output></div>
+        <div class="ctl"><label for="rHole">Fechar furos menores que</label><input type="range" id="rHole" min="0" max="20" step="0.5" value="3"><output></output></div>
+        <div class="ctl"><label for="rBlip">Tirar piscadas</label><input type="range" id="rBlip" min="0" max="4" step="1" value="2"><output></output></div>
+        <div class="ctl"><label for="rSnap">Colar na borda da imagem</label><input type="range" id="rSnap" min="0" max="8" step="1" value="3"><output></output></div>
+        <p class="hint">Ilhas e furos em % da área do objeto. Piscada é um pedaço que aparece ou some por poucos frames enquanto os vizinhos concordam.</p>
+        <div class="row"><button class="btn primary" id="refineBtn" disabled>Aplicar refino</button></div>
       </div>
     </div>
 
@@ -701,6 +750,60 @@ async function pngToFloat(blob, W, H){ if(!blob) return new Float32Array(W*H); c
   const d=ctx.getImageData(0,0,W,H).data, q=new Float32Array(W*H); for(let i=0,j=0;i<q.length;i++,j+=4) q[i]=d[j]/255; return q; }
 const f2u8 = q => { const u=new Uint8Array(q.length); for(let i=0;i<q.length;i++) u[i]=Math.round(clamp(q[i],0,1)*255); return u; };
 
+/* ---- pincel: o traço vira um "palpite" de máscara para o SAM encaixar nas bordas da imagem ---- */
+function strokeLogits(stroke, E){
+  const c=new OffscreenCanvas(256,256), x=c.getContext("2d",{willReadFrequently:true}), k=E.s/4;
+  x.fillStyle="#000"; x.fillRect(0,0,256,256); x.strokeStyle="#fff"; x.fillStyle="#fff"; x.lineCap="round"; x.lineJoin="round"; x.lineWidth=Math.max(1,2*stroke.r*k);
+  const P=stroke.pts.map(p=>[(p.x-E.rect.x)*k,(p.y-E.rect.y)*k]);
+  x.beginPath(); P.forEach(([a,b],i)=>i?x.lineTo(a,b):x.moveTo(a,b)); if(P.length===1){ x.arc(P[0][0],P[0][1],stroke.r*k,0,7); x.fill(); } else x.stroke();
+  const d=x.getImageData(0,0,256,256).data, out=new Float32Array(65536);
+  for(let i=0;i<65536;i++) out[i]= d[i*4]>127 ? 6 : -4;
+  return out;
+}
+function strokeBox(stroke, W, H){ let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9; for(const p of stroke.pts){ x1=Math.min(x1,p.x-stroke.r); y1=Math.min(y1,p.y-stroke.r); x2=Math.max(x2,p.x+stroke.r); y2=Math.max(y2,p.y+stroke.r); }
+  return [clamp(x1,0,W),clamp(y1,0,H),clamp(x2,0,W),clamp(y2,0,H)]; }
+function strokeSamples(stroke, n){ const P=stroke.pts; if(P.length<=n) return P.slice(); const out=[]; for(let i=0;i<n;i++) out.push(P[Math.round(i*(P.length-1)/(n-1))]); return out; }
+
+/* ---- componentes conexos (8 vizinhos para frente, 4 para fundo) ---- */
+function labelCC(bin, w, h, fg){
+  const n=w*h, lab=new Int32Array(n), par=[0]; let next=1;
+  const find=a=>{ while(par[a]!==a){ par[a]=par[par[a]]; a=par[a]; } return a; };
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x; if(bin[i]!==fg) continue; const nb=[];
+    if(x>0&&bin[i-1]===fg) nb.push(lab[i-1]); if(y>0&&bin[i-w]===fg) nb.push(lab[i-w]);
+    if(fg){ if(x>0&&y>0&&bin[i-w-1]) nb.push(lab[i-w-1]); if(x<w-1&&y>0&&bin[i-w+1]) nb.push(lab[i-w+1]); }
+    if(!nb.length){ par.push(next); lab[i]=next++; } else { let m=find(nb[0]); for(const b of nb){ const r=find(b); if(r<m) m=r; } for(const b of nb){ const r=find(b); if(r!==m) par[r]=m; } lab[i]=m; } }
+  const area=new Map(), border=new Set();
+  for(let i=0;i<n;i++) if(lab[i]){ const r=find(lab[i]); lab[i]=r; area.set(r,(area.get(r)||0)+1); }
+  for(let x=0;x<w;x++){ border.add(lab[x]); border.add(lab[(h-1)*w+x]); } for(let y=0;y<h;y++){ border.add(lab[y*w]); border.add(lab[y*w+w-1]); }
+  return {lab, area, border};
+}
+/* refino de um frame: tira ilhas e fecha furos (em % da área da máscara), dentro da caixa da máscara */
+function cleanFrame(q, W, H, islPct, holePct){
+  let x1=W,y1=H,x2=-1,y2=-1; for(let y=0;y<H;y+=2) for(let x=0;x<W;x+=2) if(q[y*W+x]>=0.5){ if(x<x1)x1=x; if(x>x2)x2=x; if(y<y1)y1=y; if(y>y2)y2=y; }
+  if(x2<0) return q; x1=Math.max(0,x1-4); y1=Math.max(0,y1-4); x2=Math.min(W,x2+5); y2=Math.min(H,y2+5);
+  const w=x2-x1, h=y2-y1, bin=new Uint8Array(w*h); let fgA=0;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const v=q[(y1+y)*W+x1+x]>=0.5?1:0; bin[y*w+x]=v; fgA+=v; }
+  if(islPct>0){ const {lab,area}=labelCC(bin,w,h,1), lim=islPct/100*fgA;
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x, r=lab[i]; if(r && area.get(r)<lim){ q[(y1+y)*W+x1+x]=0; bin[i]=0; } } }
+  if(holePct>0){ const {lab,area,border}=labelCC(bin,w,h,0), lim=holePct/100*fgA;
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x, r=lab[i]; if(r && !border.has(r) && area.get(r)<lim) q[(y1+y)*W+x1+x]=1; } }
+  // borda: some resto suave de ilha removida (< 0.5 sem vizinho forte)
+  return q;
+}
+/* análise de um frame (em miniatura): ilhas, furos, piscada e borda × imagem */
+function analyzeThumb(m, prev, next, gray, tw, th){
+  const n=tw*th, bin=new Uint8Array(n); let fg=0; for(let i=0;i<n;i++){ bin[i]=m[i]>=128?1:0; fg+=bin[i]; }
+  if(fg<20) return {fg, isl:0, hole:0, blip:0, edge:1};
+  const F=labelCC(bin,tw,th,1); let big=0; for(const a of F.area.values()) if(a>big) big=a;
+  let isl=0; for(const a of F.area.values()) if(a<0.15*big) isl+=a;
+  const B=labelCC(bin,tw,th,0); let hole=0; for(const [r,a] of B.area) if(!B.border.has(r) && a<0.05*fg) hole+=a;
+  let blip=0; if(prev&&next) for(let i=0;i<n;i++){ const p=prev[i]>=128, q=next[i]>=128; if(p===q && p!==!!bin[i]) blip++; }
+  let edges=0, good=0;
+  for(let y=1;y<th-1;y++) for(let x=1;x<tw-1;x++){ const i=y*tw+x; if(!bin[i]) continue; if(bin[i-1]&&bin[i+1]&&bin[i-tw]&&bin[i+tw]) continue; edges++;
+    let g=0; for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){ const j=i+dy*tw+dx; const gx=gray[j+1]-gray[j-1], gy=gray[j+tw]-gray[j-tw]; const v=Math.abs(gx)+Math.abs(gy); if(v>g) g=v; } if(g>0.07) good++; }
+  return {fg, isl:isl/fg, hole:hole/fg, blip:blip/fg, edge:edges?good/edges:1};
+}
+
 /* ============ camadas, objetos, rastreamento e montagem ============ */
 const PRESETS = {
   livre:  {name:"Livre",   layers:[{name:"Máscara", prompt:"pessoa"}]},
@@ -734,16 +837,18 @@ function readParams(){ return { conf:+$("#conf").value, edge:+$("#edge").value, 
 /* ---- objetos ----
    modelo (st.objs): o que você marcou; estado de execução: cópia com prev/mask/mb/miss. */
 function pinsFor(o){ const b=o.box, bw=b[2]-b[0], bh=b[3]-b[1]; return o.pins.map(p=>({x:b[0]+p.u*bw, y:b[1]+p.v*bh, l:p.l})); }
-function runtime(o){ return {...o, box:o.box.slice(), pins:o.pins.map(p=>({...p})), prev:null, mask:null, mb:null, miss:0, seen:0}; }
+function runtime(o){ return {...o, stroke:o.stroke||null, box:o.box.slice(), pins:o.pins.map(p=>({...p})), prev:null, mask:null, mb:null, miss:0, seen:0}; }
 async function segmentObject(cv, W, H, o, P, shared){
   const E = shared || await samEncode(cv, cropRect(o.box, W, H, 0.22));
   o.pinsAbs = o.pins.length? pinsFor(o) : [];
   const prompts=[]; if(!o.pinOnly || o.prev) prompts.push({x:o.box[0],y:o.box[1],l:2},{x:o.box[2],y:o.box[3],l:3});
   for(const p of o.pinsAbs) prompts.push(p);
-  const maskIn = o.prev ? warpLogits(o.prev, E) : null, small=!!(o.parent && o.pinOnly);
-  const L=layerById(o.layer); st.wholeObject = !o.parent && (L?.whole ?? true);
+  // nascimento de um traço de pincel: o próprio traço é o palpite inicial da máscara
+  const maskIn = o.prev ? warpLogits(o.prev, E) : (o.stroke ? strokeLogits(o.stroke, E) : null), small=!!(o.parent && o.pinOnly);
+  const L=layerById(o.layer); st.wholeObject = !o.parent && !o.stroke && (L?.whole ?? true);
   let D=await samDecode(E, prompts, maskIn, small);
-  if(maskIn && !D.gone && D.score<0.7){ const D2=await samDecode(E, prompts, null, small); if(D2.score>D.score) D=D2; }
+  if(maskIn && !o.stroke && !D.gone && D.score<0.7){ const D2=await samDecode(E, prompts, null, small); if(D2.score>D.score) D=D2; }
+  if(o.stroke && !o.prev) o.stroke=null;   // o traço só vale no nascimento; depois segue pela memória
   o.score=D.score; o.prev={rect:E.rect, s:E.s, nw:E.nw, nh:E.nh, logits:D.logits};
   const M=cleanMask(logitsToMask(E, D.logits, !!L?.matting), o.pinsAbs, P); o.mask=M;
   const mb=maskBox(M); if(mb && !D.gone){ o.mb=mb; o.miss=0; } else { o.mb=null; o.miss=(o.miss||0)+1; }
@@ -848,11 +953,11 @@ async function runAll(){
 /* ---- montar: junta frente/trás, matting, acabamento, codifica ---- */
 async function assemble(){
   const v=st.video, run=st.run, P=readParams(), W=v.W, H=v.H, N=run.N, name=base(v.name);
-  st.running=true; uiRunning(true); setSteps("export");
+  st.running=true; uiRunning(true); setSteps(st.refine?"refine":"export");
   try{
     const layers=run.layers.map(layerById).filter(Boolean), zip=new JSZip(), t0=performance.now();
     const tw=Math.min(480,W), th=Math.round(tw*H/W), tctx=new OffscreenCanvas(tw,th).getContext("2d",{willReadFrequently:true}), mc=new OffscreenCanvas(W,H), mx=mc.getContext("2d"), mimg=mx.createImageData(W,H);
-    const out={thumbs:{}, cov:{}, png:{}, all:[], allThumbs:[]};
+    const out={thumbs:{}, cov:{}, png:{}, all:[], allThumbs:[], tw, th, refined:!!R};
     for(const L of layers){ out.thumbs[L.id]=new Array(N); out.cov[L.id]=new Array(N); out.png[L.id]=new Array(N); }
     const needRvm = layers.some(L=>L.matting); const rvmState={}; const cv=makeCanvases(W,H);
     const base_=new Map(); // cache de frames base (antes da estabilização) por camada
@@ -862,26 +967,38 @@ async function assemble(){
       if(L.matting && st.rvm){ const ph=rvmCache.get(i); if(ph) { const m=mattingMerge(q,ph,W,H); base_.set(key,m); return m; } }
       base_.set(key,q); return q; };
     const rvmCache=new Map();
+    // refino (etapa 2): piscadas → ilhas/furos → colar na borda da imagem
+    const R=st.refine, rb=R?R.blip:0, ref_=new Map();
+    const getRef=async(L,i)=>{ if(!R) return getBase(L,i); const key=L.id+":"+i; if(ref_.has(key)) return ref_.get(key);
+      const c=await getBase(L,i); let q=Float32Array.from(c);
+      if(rb>0){ const nb=[]; for(let k=i-rb;k<=i+rb;k++) if(k!==i&&k>=0&&k<N) nb.push(await getBase(L,k));
+        if(nb.length>=2){ const n=nb.length; for(let k=0;k<q.length;k++){ let on=0, s=0; for(const a of nb){ const x=a[k]; s+=x; if(x>=0.5) on++; }
+          if(c[k]>=0.5 ? on<=Math.floor(n*0.2) : on>=Math.ceil(n*0.8)) q[k]=s/n; } } }
+      if(R.isl>0||R.hole>0) cleanFrame(q,W,H,R.isl,R.hole);
+      if(R.snap>0){ const bm=await createImageBitmap(run.frames[i]); cv.fx.drawImage(bm,0,0); bm.close(); guidedRegion(cv,q,W,H,Math.max(1,Math.round(R.snap*Math.max(W,H)/1920))); }
+      ref_.set(key,q); return q; };
     const toThumb=async(u8)=>{ for(let k=0,j=0;k<u8.length;k++,j+=4){ mimg.data[j]=mimg.data[j+1]=mimg.data[j+2]=u8[k]; mimg.data[j+3]=255; } mx.putImageData(mimg,0,0);
       tctx.drawImage(mc,0,0,tw,th); const d=tctx.getImageData(0,0,tw,th).data, t=new Uint8Array(tw*th); for(let k=0,j=0;k<t.length;k++,j+=4) t[k]=d[j]; return t; };
     for(let i=0;i<N;i++){
       if(st.stop) throw new Error("Parado.");
       // matting precisa dos frames em ordem (memória do RVM): calcula o alfa do frame i+smooth à frente
-      if(needRvm){ for(let j=rvmCache.size? Math.max(...rvmCache.keys())+1 : 0; j<=Math.min(N-1,i+P.smooth); j++){ const bm=await createImageBitmap(run.frames[j]); cv.fx.drawImage(bm,0,0); bm.close(); rvmCache.set(j, await rvmStep(rvmState,cv,W,H)); } }
+      if(needRvm){ for(let j=rvmCache.size? Math.max(...rvmCache.keys())+1 : 0; j<=Math.min(N-1,i+P.smooth+rb); j++){ const bm=await createImageBitmap(run.frames[j]); cv.fx.drawImage(bm,0,0); bm.close(); rvmCache.set(j, await rvmStep(rvmState,cv,W,H)); } }
       let all=null;
       for(const L of layers){
-        let q; if(P.smooth>0){ const ks=[]; for(let k=i-P.smooth;k<=i+P.smooth;k++) if(k>=0&&k<N) ks.push(k); const arr=await Promise.all(ks.map(k=>getBase(L,k))), c=await getBase(L,i);
+        let q; if(P.smooth>0){ const ks=[]; for(let k=i-P.smooth;k<=i+P.smooth;k++) if(k>=0&&k<N) ks.push(k); const arr=[]; for(const k of ks) arr.push(await getRef(L,k)); const c=await getRef(L,i);
           q=new Float32Array(W*H); const n=arr.length;
           for(let k=0;k<q.length;k++){ let s=0, mn=1, mx=0; for(const a of arr){ const x=a[k]; s+=x; if(x<mn) mn=x; if(x>mx) mx=x; } q[k]= mx-mn>0.6 ? c[k] : s/n; } } // tremido de borda é médio; movimento real mantém o frame
-        else q=await getBase(L,i);
+        else q=await getRef(L,i);
         const m=finish(q,W,H,P);
         if(!all) all=new Float32Array(W*H); for(let k=0;k<m.length;k++) if(m[k]>all[k]) all[k]=m[k];
         const u8=toU8(m,P.invert); out.png[L.id][i]=await pngGray(u8,W,H); out.thumbs[L.id][i]=await toThumb(toU8(m,false));
         let s=0; for(let k=0;k<m.length;k+=97) s+=m[k]; out.cov[L.id][i]=s/(m.length/97);
       }
       const ua=toU8(all||new Float32Array(W*H),P.invert); out.all[i]=await pngGray(ua,W,H); out.allThumbs[i]=await toThumb(toU8(all||new Float32Array(W*H),false));
-      for(const k of [...base_.keys()]){ const fi=+k.split(":")[1]; if(fi<i-P.smooth) base_.delete(k); }
-      for(const k of [...rvmCache.keys()]) if(k<i-P.smooth-1) rvmCache.delete(k);
+      const keep=P.smooth+rb+1;
+      for(const k of [...base_.keys()]){ const fi=+k.split(":")[1]; if(fi<i-keep) base_.delete(k); }
+      for(const k of [...ref_.keys()]){ const fi=+k.split(":")[1]; if(fi<i-keep) ref_.delete(k); }
+      for(const k of [...rvmCache.keys()]) if(k<i-keep-1) rvmCache.delete(k);
       setBar(0.9+0.06*(i+1)/N); if(i%6===0) setStatus(`Montando ${i+1}/${N}…`);
     }
     st.out=out;
@@ -906,8 +1023,9 @@ async function assemble(){
     const items=[[true,`${N} de ${N} frames em cada camada, mesmos tempos e resolução ${W}×${H}`],[!$("#outMp4").checked||enc===N, $("#outMp4").checked?`MP4 com ${enc} frames`:"MP4 desligado"],
       [!st.suspects.length, st.suspects.length?`Revise os frames ${st.suspects.slice(0,10).join(", ")}${st.suspects.length>10?"…":""} (marcados em amarelo na linha do tempo)`:"Sem saltos de área entre frames"]];
     for(const [y,t] of items){ const d=document.createElement("div"); d.className=y?"":"n"; d.textContent=t; ck.append(d); }
+    setStatus("Analisando a qualidade…"); await analyzeAll();
     setBar(1); $("#saveBtn").disabled=false; $("#finishBtn").disabled=false;
-    setStatus(`Pronto. Rastreamento ${fmtTime(run.trackTime||0)}, montagem ${fmtTime((performance.now()-t0)/1000)}. Baixe o ZIP no topo.`);
+    setStatus(`Pronto. Rastreamento ${fmtTime(run.trackTime||0)}, montagem ${fmtTime((performance.now()-t0)/1000)}.${st.quality?` Nota ${st.quality.score}/100 (aba Refino).`:""} Baixe o ZIP no topo.`);
     drawTimeline(); drawView();
   } finally { st.running=false; uiRunning(false); }
 }
@@ -933,11 +1051,32 @@ function projectJson(){
     novos_objetos: st.sel==="all", parametros: readParams() };
 }
 
+/* ---- etapa 2: análise de qualidade (ilhas, furos, piscadas, borda × imagem) ---- */
+async function analyzeAll(){
+  const O=st.out, run=st.run, v=st.video; if(!O||!run) return null;
+  const tw=O.tw, th=O.th, N=run.N, gx=new OffscreenCanvas(tw,th).getContext("2d",{willReadFrequently:true});
+  const layers=run.layers.map(layerById).filter(Boolean), per=[];
+  for(let i=0;i<N;i++){
+    const bm=await createImageBitmap(run.frames[i]); gx.drawImage(bm,0,0,tw,th); bm.close();
+    const d=gx.getImageData(0,0,tw,th).data, gray=new Float32Array(tw*th); for(let k=0,j=0;k<gray.length;k++,j+=4) gray[k]=(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])/255;
+    const fr={i, isl:0, hole:0, blip:0, edge:1, fg:0};
+    for(const L of layers){ const T=O.thumbs[L.id]; const a=analyzeThumb(T[i], T[i-1], T[i+1], gray, tw, th); if(!a.fg) continue;
+      fr.isl=Math.max(fr.isl,a.isl); fr.hole=Math.max(fr.hole,a.hole); fr.blip=Math.max(fr.blip,a.blip); fr.edge=Math.min(fr.edge,a.edge); fr.fg+=a.fg; }
+    // nota: 100 menos penalidades (cada critério tem um teto)
+    fr.pIsl=Math.min(25, fr.isl*400); fr.pHole=Math.min(15, fr.hole*300); fr.pBlip=Math.min(35, fr.blip*350); fr.pEdge=Math.min(25, Math.max(0,0.85-fr.edge)*60);
+    fr.score=fr.fg? Math.round(100-fr.pIsl-fr.pHole-fr.pBlip-fr.pEdge) : 100; per.push(fr);
+    if(i%10===0) await sleep(0);
+  }
+  const avg=k=>per.reduce((s,f)=>s+f[k],0)/Math.max(1,per.length);
+  const res={per, score:Math.round(avg("score")), isl:avg("pIsl"), hole:avg("pHole"), blip:avg("pBlip"), edge:avg("pEdge")};
+  st.quality=res; renderQuality(); drawTimeline(); return res;
+}
+
 /* ============ interface ============ */
 const view=$("#view"), vctx=view.getContext("2d"), vid=$("#vid");
 let busy=false, drag=null, srcURL=null;
 async function guarded(fn){ if(busy||st.running) return; busy=true; try{ await fn(); }catch(e){ setStatus(e.message); console.error(e); } finally{ busy=false; } }
-function setSteps(now){ const order=["video","mark","track","export"], k=order.indexOf(now); $$("#steps li").forEach((li,i)=>{ li.className = i<k?"done": i===k?"now":""; }); }
+function setSteps(now){ const order=["video","mark","track","refine","export"], k=order.indexOf(now); $$("#steps li").forEach((li,i)=>{ li.className = i<k?"done": i===k?"now":""; }); }
 function uiRunning(on){ $("#runBtn").disabled=on; $("#stopBtn").hidden=!on; $("#stopBtn").disabled=!on; $("#testBtn").disabled=on; $("#finishBtn").disabled=on||!st.run; if(!on) st.stop=false; }
 
 /* ---- abas ---- */
@@ -1005,8 +1144,10 @@ function curFrame(){ const v=st.video; if(!v) return 0; const t=Math.round((vid.
 function seekFrame(i){ const v=st.video; if(!v) return; vid.pause(); vid.currentTime=(v.ts[clamp(i,0,v.nFrames-1)]-v.ts[0])/1e6+1e-3; }
 let shownFrame=null; function showFrame(i){ shownFrame=i; seekFrame(i); }
 function hexRgb(h){ const n=parseInt(h.slice(1),16); return [n>>16&255,n>>8&255,n&255]; }
+function showingPrev(){ return !!st.outPrev && (compareHeld || $("#compareBtn").getAttribute("aria-pressed")==="true"); }
+let compareHeld=false;
 function overlayCanvas(fi){
-  const O=st.out; if(!O) return null; const tw=O.tw||Math.min(480,st.video.W), th=Math.round(tw*st.video.H/st.video.W);
+  const O=showingPrev()? st.outPrev : st.out; if(!O) return null; if(st.view==="edge") return null; const tw=O.tw||Math.min(480,st.video.W), th=Math.round(tw*st.video.H/st.video.W);
   const c=new OffscreenCanvas(tw,th), x=c.getContext("2d"), img=x.createImageData(tw,th), d=img.data;
   if(st.view==="mask"){ const L=st.layers.length>1? layerById(st.activeLayer) : null; const m=L? O.thumbs[L.id]?.[fi] : O.allThumbs[fi]; if(!m) return null;
     for(let i=0,j=0;i<m.length;i++,j+=4){ d[j]=d[j+1]=d[j+2]=m[i]; d[j+3]=255; } }
@@ -1033,7 +1174,15 @@ function drawView(){
       hud.push(st.objs.some(o=>o.fb===fi && o.k>=0) ? "Frame analisado" : "Correção neste frame");
     } else { const c=overlayCanvas(fi); if(c) vctx.drawImage(c,0,0,W,H); if(st.view==="mask" && st.out) hud.push(st.layers.length>1? `Máscara: ${layerById(st.activeLayer)?.name}` : "Máscara"); }
   }
+  // traço sendo pintado e cursor do pincel
+  { const sx=W/v.W, sy=H/v.H;
+    if(stroke){ vctx.save(); vctx.globalAlpha=0.45; vctx.strokeStyle=vctx.fillStyle=stroke.sign>0?"#4ed69a":"#ff5a4e"; vctx.lineCap="round"; vctx.lineJoin="round"; vctx.lineWidth=2*stroke.r*sx;
+      vctx.beginPath(); stroke.pts.forEach((q,j)=>j?vctx.lineTo(q.x*sx,q.y*sy):vctx.moveTo(q.x*sx,q.y*sy)); if(stroke.pts.length===1){ vctx.arc(stroke.pts[0].x*sx,stroke.pts[0].y*sy,stroke.r*sx,0,7); vctx.fill(); } else vctx.stroke(); vctx.restore(); }
+    if(hover && (st.tool==="bplus"||st.tool==="bminus")){ const k=view.width/Math.max(1,contentRect().width); vctx.beginPath(); vctx.arc(hover.x*sx,hover.y*sy,brushPx()/2*sx,0,7); vctx.lineWidth=1.5*k; vctx.strokeStyle=st.tool==="bplus"?"#4ed69a":"#ff5a4e"; vctx.stroke(); } }
+  if(st.view==="edge" && !(E && E.fi===fi)) drawEdges(fi);
   if(st.suspects && st.suspects.includes(fi)) hud.push("Revisar este frame");
+  const qf=st.quality?.per?.[fi]; if(qf && st.view!=="orig") hud.push(`Nota ${qf.score}`);
+  if(showingPrev()) hud.push("Antes do refino");
   $("#hud").innerHTML=hud.map(t=>`<span>${t}</span>`).join("");
 }
 vid.addEventListener("seeked",()=>{ drawView(); drawTimeline(); }); vid.addEventListener("loadeddata",drawView);
@@ -1059,6 +1208,7 @@ function drawTimeline(){
     const cov=st.out?.cov?.[L.id]; if(cov){ const mx=Math.max(1e-6,...cov); const [r,g,b]=hexRgb(L.color);
       for(let i=0;i<N;i++){ const a=cov[i]/mx; if(a<=0) continue; x.fillStyle=`rgba(${r},${g},${b},${0.25+0.75*a})`; x.fillRect(X(i)-Math.max(1,(w-16)/N/2), y, Math.max(1.5,(w-16)/N), 6); } } });
   for(const i of st.suspects||[]){ x.fillStyle="#f2b94b"; x.fillRect(X(i)-1,h-6,2,5); }
+  const Q=st.quality; if(Q) for(const f of Q.per){ if(!f.fg || f.score>=90) continue; x.fillStyle=f.score>=70?"rgba(242,185,75,.9)":"rgba(255,109,109,.95)"; x.fillRect(X(f.i)-Math.max(1,(w-16)/N/2),h-6,Math.max(2,(w-16)/N),5); }
   for(const o of st.objs){ const L=layerById(o.layer); if(!L) continue; const cx=X(o.fb), cy=18; x.fillStyle=L.color; x.beginPath(); x.moveTo(cx,cy-5); x.lineTo(cx+5,cy); x.lineTo(cx,cy+5); x.lineTo(cx-5,cy); x.closePath(); x.fill(); x.strokeStyle="#16171a"; x.lineWidth=1.5; x.stroke(); }
   const pf=curFrame(); x.fillStyle="#f4f3ee"; x.fillRect(Math.round(X(pf))-1,0,2,h);
 }
@@ -1113,12 +1263,18 @@ function dispAt(p){ let best=null, ba=Infinity; for(const [,dd] of st.edit.disp)
     const b=dd.mb||dd.o.box, inBox=p.x>=b[0]&&p.x<=b[2]&&p.y>=b[1]&&p.y<=b[3];
     if(inside||inBox){ const a=(b[2]-b[0])*(b[3]-b[1])*(inside?0.5:1); if(a<ba){ ba=a; best=dd; } } } return best; }
 async function ensureEdit(){ const fi=curFrame(); if(!st.edit || st.edit.fi!==fi){ await loadEngine(); await openEdit(fi); setSteps("mark"); } return st.edit; }
-const TOOL_HINT={select:"Clique num objeto para ligar ou desligar.", plus:"Clique no que deve entrar. Fora de qualquer objeto, cria um objeto novo na camada ativa.", minus:"Clique no que deve sair. Vale em qualquer frame: a correção segue para frente e para trás.", box:"Arraste uma caixa em volta de um objeto novo (camada ativa). Com Shift, a caixa vira algo a tirar."};
-function setTool(t){ st.tool=t; $$("[data-tool]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tool===t)); $("#toolHint").textContent=TOOL_HINT[t]; view.style.cursor=t==="select"?"default":"crosshair"; }
+const TOOL_HINT={bplus:"Pinte por cima do que deve entrar. O traço se encaixa na borda da imagem e segue pelo vídeo.", bminus:"Pinte por cima do que deve sair. Vale para frente e para trás a partir deste frame.", select:"Clique num objeto para ligar ou desligar.", plus:"Clique no que deve entrar. Fora de qualquer objeto, cria um objeto novo na camada ativa.", minus:"Clique no que deve sair. Vale em qualquer frame: a correção segue para frente e para trás.", box:"Arraste uma caixa em volta de um objeto novo (camada ativa). Com Shift, a caixa vira algo a tirar."};
+function setTool(t){ st.tool=t; $$("[data-tool]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.tool===t)); $("#toolHint").textContent=TOOL_HINT[t];
+  const brush=t==="bplus"||t==="bminus"; $("#brushBar").hidden=!brush; view.style.cursor=t==="select"?"default":brush?"none":"crosshair"; drawView(); }
+let stroke=null, hover=null;
+function brushPx(){ return +$("#brushSize").value; }
+$("#brushSize").addEventListener("input",()=>{ $("#brushOut").textContent=$("#brushSize").value+" px"; drawView(); });
+function setBrushDefault(){ const v=st.video; if(!v) return; const d=Math.round(Math.max(8,Math.min(300,v.H*0.035))); $("#brushSize").max=Math.max(60,Math.round(v.H*0.3)); $("#brushSize").value=d; $("#brushOut").textContent=d+" px"; }
 $$("[data-tool]").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
 view.addEventListener("pointerdown",e=>{
   if(!st.video || st.running) return; const p=viewToFrame(e);
   if(st.tool==="box"){ drag={x0:p.x,y0:p.y,x1:p.x,y1:p.y,neg:e.shiftKey}; view.setPointerCapture(e.pointerId); return; }
+  if(st.tool==="bplus"||st.tool==="bminus"){ stroke={pts:[p], r:brushPx()/2, sign:(st.tool==="bplus")!==e.altKey?1:-1}; view.setPointerCapture(e.pointerId); drawView(); return; }
   guarded(async()=>{
     const E=await ensureEdit(), fi=E.fi, v=st.video, sc=view.width/v.W;
     const hit=dispAt(p);
@@ -1147,7 +1303,33 @@ async function segPiece(E, T){
   else E.disp.set(T.id,{o:r,tpl:T,mask:r.mask,mb:r.mb});
   makeOv(E.disp.get(T.id),sc);
 }
-view.addEventListener("pointermove",e=>{ if(!drag) return; const p=viewToFrame(e); drag.x1=p.x; drag.y1=p.y; drawView(); });
+view.addEventListener("pointermove",e=>{ const p=viewToFrame(e);
+  if(stroke){ const l=stroke.pts[stroke.pts.length-1]; if(Math.hypot(p.x-l.x,p.y-l.y)>stroke.r*0.35){ stroke.pts.push(p); drawView(); } return; }
+  if(st.tool==="bplus"||st.tool==="bminus"){ hover=p; drawView(); }
+  if(!drag) return; drag.x1=p.x; drag.y1=p.y; drawView(); });
+view.addEventListener("pointerleave",()=>{ hover=null; drawView(); });
+view.addEventListener("pointerup",()=>{ if(!stroke) return; const S=stroke; stroke=null;
+  guarded(async()=>{ const E=await ensureEdit(), v=st.video;
+    // o objeto que o traço mais cobre vira o "dono"; sem dono, verde cria um objeto novo na camada ativa
+    const votes=new Map(); for(const q of S.pts){ const h=dispAt(q); if(h) votes.set(h,(votes.get(h)||0)+1); }
+    let hit=null, best=0; for(const [h,c] of votes) if(c>best){ best=c; hit=h; }
+    if(!hit && S.sign<0){ setStatus("Pincel − precisa passar por cima de um objeto."); drawView(); return; }
+    const parent=hit?hit.o:null, layer=parent?parent.layer:st.activeLayer, sb=strokeBox(S,v.W,v.H);
+    const T={id:"s"+(st.nextId++), layer, k:-1, sign:S.sign, label: parent?(S.sign>0?`pincel + em ${parent.label}`:`pincel − em ${parent.label}`):`pincel em ${layerById(layer)?.name||"camada"}`,
+      active:true, fb:E.fi, parent:parent?parent.id:null, box:sb, pins:[], stroke:{pts:S.pts.map(q=>({x:q.x,y:q.y})), r:S.r}};
+    setStatus("Encaixando o traço na imagem…"); await segBrush(E,T);
+    st.objs.push(T); st.history.push({o:T,kind:"obj"}); renderObjs(); drawTimeline(); drawView();
+    setStatus(`${S.sign>0?"Pincel +":"Pincel −"} no frame ${E.fi}. Segue para frente e para trás quando você gerar.`); });
+});
+async function segBrush(E, T){
+  const v=st.video, P=readParams(), sc=view.width/v.W;
+  // pontos ao longo do traço + caixa do traço + o traço como máscara inicial
+  const samples=strokeSamples(T.stroke,5), bw=Math.max(1,T.box[2]-T.box[0]), bh=Math.max(1,T.box[3]-T.box[1]);
+  T.pins=samples.map(q=>({u:(q.x-T.box[0])/bw, v:(q.y-T.box[1])/bh, l:1}));
+  const r=runtime(T); const Enc=await samEncode(E.cv, cropRect(T.box,v.W,v.H,0.35)); await segmentObject(E.cv,v.W,v.H,r,P,Enc);
+  if(r.mb){ const nb=r.mb.slice(), nw=Math.max(1,nb[2]-nb[0]), nh=Math.max(1,nb[3]-nb[1]); T.box=nb; T.pins=samples.map(q=>({u:(q.x-nb[0])/nw, v:(q.y-nb[1])/nh, l:1})); }
+  const dd={o:r,tpl:T,mask:r.mask,mb:r.mb}; makeOv(dd,sc); E.disp.set(T.id,dd);
+}
 view.addEventListener("pointerup",()=>{ if(!drag) return; const d=drag; drag=null;
   const b=[Math.min(d.x0,d.x1),Math.min(d.y0,d.y1),Math.max(d.x0,d.x1),Math.max(d.y0,d.y1)]; if(b[2]-b[0]<8||b[3]-b[1]<8){ drawView(); return; }
   guarded(async()=>{ const E=await ensureEdit(), v=st.video; const L=layerById(st.activeLayer);
@@ -1180,7 +1362,7 @@ async function useFile(file){
     fitView(v.W,v.H); $("#fileName").textContent=file.name;
     $("#meta").innerHTML=[["Resolução",`${v.W}×${v.H}`],["Frames",v.nFrames],["FPS",v.fps.toFixed(3)],["Duração",v.dur.toFixed(2)+" s"],["Codec",v.codec.split(".")[0]],["Rotação",v.rot+"°"]]
       .map(([k,x])=>`<div><small>${k}</small><span>${x}</span></div>`).join("");
-    $("#viewMsg").hidden=true; renderAll(); setSteps("video");
+    $("#viewMsg").hidden=true; st.quality=null; st.outPrev=null; st.refine=null; edgeCache.clear(); $("#compareBtn").hidden=true; setBrushDefault(); renderAll(); renderQuality(); setSteps("video");
     setStatus(`${v.nFrames} frames prontos. Vá até um frame onde o objeto aparece inteiro e clique em Analisar este frame.`);
   }catch(e){ setStatus(e.message); $("#viewMsg").textContent=e.message; console.error(e); }
 }
@@ -1210,6 +1392,56 @@ document.addEventListener("keydown",e=>{
   else if(k==="v") setTool("select"); else if(k==="a") setTool("plus"); else if(k==="s") setTool("minus"); else if(k==="b") setTool("box");
 });
 window.__dlm={st, analyze, runAll, assemble, viewToFrame, contentRect, seekFrame, curFrame};
+
+/* ---- vista Contorno: a borda da máscara (resolução cheia) por cima do vídeo ---- */
+const edgeCache=new Map();
+function drawEdges(fi){
+  const O=showingPrev()? st.outPrev : st.out; if(!O) return; const v=st.video, W=view.width, H=view.height;
+  const key=(showingPrev()?"p":"n")+fi+":"+W;
+  const paint=(c)=>vctx.drawImage(c,0,0,W,H);
+  if(edgeCache.has(key)){ paint(edgeCache.get(key)); return; }
+  if(!vid.paused){ // tocando: usa as miniaturas
+    for(const L of st.layers){ if(!L.on) continue; const m=O.thumbs[L.id]?.[fi]; if(!m) continue; paint(edgeFrom(m,O.tw,O.th,L.color,1)); } return; }
+  (async()=>{ const c=new OffscreenCanvas(W,H), x=c.getContext("2d");
+    for(const L of st.layers){ if(!L.on) continue; const b=O.png[L.id]?.[fi]; if(!b) continue; const bm=await createImageBitmap(b,{resizeWidth:W,resizeHeight:H}); const t=new OffscreenCanvas(W,H), tx=t.getContext("2d",{willReadFrequently:true}); tx.drawImage(bm,0,0); bm.close();
+      const d=tx.getImageData(0,0,W,H).data, m=new Uint8Array(W*H); for(let i=0,j=0;i<m.length;i++,j+=4) m[i]=$("#invert").checked?255-d[j]:d[j]; x.drawImage(edgeFrom(m,W,H,L.color,Math.max(1,Math.round(W/900))),0,0); }
+    edgeCache.set(key,c); if(edgeCache.size>40) edgeCache.delete(edgeCache.keys().next().value); if(curFrame()===fi) drawView(); })();
+}
+function edgeFrom(m, w, h, color, thick){
+  const c=new OffscreenCanvas(w,h), x=c.getContext("2d"), img=x.createImageData(w,h), [r,g,b]=hexRgb(color), t=thick||1;
+  for(let y=t;y<h-t;y++) for(let xx=t;xx<w-t;xx++){ const i=y*w+xx, on=m[i]>=128; if(!on) continue;
+    if(m[i-t]<128||m[i+t]<128||m[i-t*w]<128||m[i+t*w]<128){ for(let dy=0;dy<t;dy++) for(let dx=0;dx<t;dx++){ const j=((y+dy)*w+xx+dx)*4; img.data[j]=r; img.data[j+1]=g; img.data[j+2]=b; img.data[j+3]=255; } } }
+  x.putImageData(img,0,0); return c;
+}
+
+/* ---- painel de refino ---- */
+function renderQuality(){
+  const Q=st.quality, box=$("#scoreCrit"); $("#analyzeBtn").disabled=!st.out; $("#refineBtn").disabled=!st.run;
+  if(!Q){ $("#scoreNum").textContent="–"; return; }
+  $("#scoreNum").textContent=Q.score;
+  const col=v=>v>=85?"var(--ok)":v>=65?"var(--warn)":"var(--bad)";
+  const row=(name,pen,max)=>{ const v=Math.round(100-100*pen/max); return `<div><span>${name}</span><i><b style="width:${v}%;background:${col(v)}"></b></i><em>${v}</em></div>`; };
+  box.innerHTML=row("Ilhas soltas",Q.isl,25)+row("Furos",Q.hole,15)+row("Piscadas",Q.blip,35)+row("Borda × imagem",Q.edge,25)
+    +(st.prevScore!=null && st.out?.refined ? `<p class="delta">Antes do refino: ${st.prevScore} → agora ${Q.score}</p>`:"");
+  const w=$("#worst"); w.textContent="";
+  const worst=[...Q.per].filter(f=>f.fg).sort((a,b)=>a.score-b.score).slice(0,12);
+  if(!worst.length || worst[0].score>=95){ w.innerHTML='<p class="empty">Nenhum frame com problema relevante.</p>'; return; }
+  for(const f of worst){ if(f.score>=95) break; const why=[]; if(f.pBlip>3) why.push("piscada"); if(f.pIsl>3) why.push("ilhas"); if(f.pHole>2) why.push("furos"); if(f.pEdge>3) why.push("borda fora da imagem");
+    const b=document.createElement("button"); b.className="worst"; b.innerHTML=`<b>frame ${f.i}</b><em style="color:${col(f.score)}">${f.score}</em><span>${why.join(", ")||"pequenos desvios"}</span>`; b.onclick=()=>seekFrame(f.i); w.append(b); }
+}
+$("#analyzeBtn").onclick=()=>guarded(async()=>{ setStatus("Analisando a qualidade…"); const r=await analyzeAll(); if(r) setStatus(`Nota média ${r.score}/100. Veja os frames para revisar no painel Refino.`); });
+$("#refineBtn").onclick=()=>{ if(st.running||busy||!st.run) return;
+  st.prevScore=st.quality?.score ?? null; st.outPrev=st.out; edgeCache.clear();
+  st.refine={isl:+$("#rIsl").value, hole:+$("#rHole").value, blip:+$("#rBlip").value, snap:+$("#rSnap").value};
+  $("#compareBtn").hidden=false;
+  assemble().then(()=>{ const q=st.quality?.score; setStatus(`Refino aplicado. Nota ${st.prevScore??"–"} → ${q??"–"}. Segure C (ou o botão “Antes do refino”) para comparar.`); renderQuality(); }).catch(e=>{ setStatus(e.message); console.error(e); }); };
+$("#compareBtn").onclick=()=>{ const b=$("#compareBtn"); b.setAttribute("aria-pressed", b.getAttribute("aria-pressed")!=="true"); edgeCache.clear(); drawView(); };
+for(const id of ["rIsl","rHole","rBlip","rSnap"]){ const el=$("#"+id), out=el.nextElementSibling; const fmt=()=>{ out.textContent= id==="rBlip"?(+el.value?"±"+el.value+" fr":"off") : id==="rSnap"?(+el.value?el.value+" px":"off") : (+el.value?el.value+"%":"off"); }; el.addEventListener("input",fmt); fmt(); }
+document.addEventListener("keydown",e=>{ if(e.target.closest("input,select,textarea")) return; const k=e.key.toLowerCase();
+  if(k==="c" && st.outPrev && !compareHeld){ compareHeld=true; edgeCache.clear(); drawView(); }
+  else if(k==="g") setTool("bplus"); else if(k==="r") setTool("bminus");
+  else if(k==="[" || k==="]"){ const el=$("#brushSize"); el.value=clamp(+el.value*(k==="]"?1.2:1/1.2),+el.min,+el.max)|0; el.dispatchEvent(new Event("input")); } });
+document.addEventListener("keyup",e=>{ if(e.key.toLowerCase()==="c" && compareHeld){ compareHeld=false; edgeCache.clear(); drawView(); } });
 
 /* ============ início ============ */
 (async()=>{

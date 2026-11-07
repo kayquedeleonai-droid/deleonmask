@@ -31,16 +31,18 @@ function readParams(){ return { conf:+$("#conf").value, edge:+$("#edge").value, 
 /* ---- objetos ----
    modelo (st.objs): o que você marcou; estado de execução: cópia com prev/mask/mb/miss. */
 function pinsFor(o){ const b=o.box, bw=b[2]-b[0], bh=b[3]-b[1]; return o.pins.map(p=>({x:b[0]+p.u*bw, y:b[1]+p.v*bh, l:p.l})); }
-function runtime(o){ return {...o, box:o.box.slice(), pins:o.pins.map(p=>({...p})), prev:null, mask:null, mb:null, miss:0, seen:0}; }
+function runtime(o){ return {...o, stroke:o.stroke||null, box:o.box.slice(), pins:o.pins.map(p=>({...p})), prev:null, mask:null, mb:null, miss:0, seen:0}; }
 async function segmentObject(cv, W, H, o, P, shared){
   const E = shared || await samEncode(cv, cropRect(o.box, W, H, 0.22));
   o.pinsAbs = o.pins.length? pinsFor(o) : [];
   const prompts=[]; if(!o.pinOnly || o.prev) prompts.push({x:o.box[0],y:o.box[1],l:2},{x:o.box[2],y:o.box[3],l:3});
   for(const p of o.pinsAbs) prompts.push(p);
-  const maskIn = o.prev ? warpLogits(o.prev, E) : null, small=!!(o.parent && o.pinOnly);
-  const L=layerById(o.layer); st.wholeObject = !o.parent && (L?.whole ?? true);
+  // nascimento de um traço de pincel: o próprio traço é o palpite inicial da máscara
+  const maskIn = o.prev ? warpLogits(o.prev, E) : (o.stroke ? strokeLogits(o.stroke, E) : null), small=!!(o.parent && o.pinOnly);
+  const L=layerById(o.layer); st.wholeObject = !o.parent && !o.stroke && (L?.whole ?? true);
   let D=await samDecode(E, prompts, maskIn, small);
-  if(maskIn && !D.gone && D.score<0.7){ const D2=await samDecode(E, prompts, null, small); if(D2.score>D.score) D=D2; }
+  if(maskIn && !o.stroke && !D.gone && D.score<0.7){ const D2=await samDecode(E, prompts, null, small); if(D2.score>D.score) D=D2; }
+  if(o.stroke && !o.prev) o.stroke=null;   // o traço só vale no nascimento; depois segue pela memória
   o.score=D.score; o.prev={rect:E.rect, s:E.s, nw:E.nw, nh:E.nh, logits:D.logits};
   const M=cleanMask(logitsToMask(E, D.logits, !!L?.matting), o.pinsAbs, P); o.mask=M;
   const mb=maskBox(M); if(mb && !D.gone){ o.mb=mb; o.miss=0; } else { o.mb=null; o.miss=(o.miss||0)+1; }
@@ -145,11 +147,11 @@ async function runAll(){
 /* ---- montar: junta frente/trás, matting, acabamento, codifica ---- */
 async function assemble(){
   const v=st.video, run=st.run, P=readParams(), W=v.W, H=v.H, N=run.N, name=base(v.name);
-  st.running=true; uiRunning(true); setSteps("export");
+  st.running=true; uiRunning(true); setSteps(st.refine?"refine":"export");
   try{
     const layers=run.layers.map(layerById).filter(Boolean), zip=new JSZip(), t0=performance.now();
     const tw=Math.min(480,W), th=Math.round(tw*H/W), tctx=new OffscreenCanvas(tw,th).getContext("2d",{willReadFrequently:true}), mc=new OffscreenCanvas(W,H), mx=mc.getContext("2d"), mimg=mx.createImageData(W,H);
-    const out={thumbs:{}, cov:{}, png:{}, all:[], allThumbs:[]};
+    const out={thumbs:{}, cov:{}, png:{}, all:[], allThumbs:[], tw, th, refined:!!R};
     for(const L of layers){ out.thumbs[L.id]=new Array(N); out.cov[L.id]=new Array(N); out.png[L.id]=new Array(N); }
     const needRvm = layers.some(L=>L.matting); const rvmState={}; const cv=makeCanvases(W,H);
     const base_=new Map(); // cache de frames base (antes da estabilização) por camada
@@ -159,26 +161,38 @@ async function assemble(){
       if(L.matting && st.rvm){ const ph=rvmCache.get(i); if(ph) { const m=mattingMerge(q,ph,W,H); base_.set(key,m); return m; } }
       base_.set(key,q); return q; };
     const rvmCache=new Map();
+    // refino (etapa 2): piscadas → ilhas/furos → colar na borda da imagem
+    const R=st.refine, rb=R?R.blip:0, ref_=new Map();
+    const getRef=async(L,i)=>{ if(!R) return getBase(L,i); const key=L.id+":"+i; if(ref_.has(key)) return ref_.get(key);
+      const c=await getBase(L,i); let q=Float32Array.from(c);
+      if(rb>0){ const nb=[]; for(let k=i-rb;k<=i+rb;k++) if(k!==i&&k>=0&&k<N) nb.push(await getBase(L,k));
+        if(nb.length>=2){ const n=nb.length; for(let k=0;k<q.length;k++){ let on=0, s=0; for(const a of nb){ const x=a[k]; s+=x; if(x>=0.5) on++; }
+          if(c[k]>=0.5 ? on<=Math.floor(n*0.2) : on>=Math.ceil(n*0.8)) q[k]=s/n; } } }
+      if(R.isl>0||R.hole>0) cleanFrame(q,W,H,R.isl,R.hole);
+      if(R.snap>0){ const bm=await createImageBitmap(run.frames[i]); cv.fx.drawImage(bm,0,0); bm.close(); guidedRegion(cv,q,W,H,Math.max(1,Math.round(R.snap*Math.max(W,H)/1920))); }
+      ref_.set(key,q); return q; };
     const toThumb=async(u8)=>{ for(let k=0,j=0;k<u8.length;k++,j+=4){ mimg.data[j]=mimg.data[j+1]=mimg.data[j+2]=u8[k]; mimg.data[j+3]=255; } mx.putImageData(mimg,0,0);
       tctx.drawImage(mc,0,0,tw,th); const d=tctx.getImageData(0,0,tw,th).data, t=new Uint8Array(tw*th); for(let k=0,j=0;k<t.length;k++,j+=4) t[k]=d[j]; return t; };
     for(let i=0;i<N;i++){
       if(st.stop) throw new Error("Parado.");
       // matting precisa dos frames em ordem (memória do RVM): calcula o alfa do frame i+smooth à frente
-      if(needRvm){ for(let j=rvmCache.size? Math.max(...rvmCache.keys())+1 : 0; j<=Math.min(N-1,i+P.smooth); j++){ const bm=await createImageBitmap(run.frames[j]); cv.fx.drawImage(bm,0,0); bm.close(); rvmCache.set(j, await rvmStep(rvmState,cv,W,H)); } }
+      if(needRvm){ for(let j=rvmCache.size? Math.max(...rvmCache.keys())+1 : 0; j<=Math.min(N-1,i+P.smooth+rb); j++){ const bm=await createImageBitmap(run.frames[j]); cv.fx.drawImage(bm,0,0); bm.close(); rvmCache.set(j, await rvmStep(rvmState,cv,W,H)); } }
       let all=null;
       for(const L of layers){
-        let q; if(P.smooth>0){ const ks=[]; for(let k=i-P.smooth;k<=i+P.smooth;k++) if(k>=0&&k<N) ks.push(k); const arr=await Promise.all(ks.map(k=>getBase(L,k))), c=await getBase(L,i);
+        let q; if(P.smooth>0){ const ks=[]; for(let k=i-P.smooth;k<=i+P.smooth;k++) if(k>=0&&k<N) ks.push(k); const arr=[]; for(const k of ks) arr.push(await getRef(L,k)); const c=await getRef(L,i);
           q=new Float32Array(W*H); const n=arr.length;
           for(let k=0;k<q.length;k++){ let s=0, mn=1, mx=0; for(const a of arr){ const x=a[k]; s+=x; if(x<mn) mn=x; if(x>mx) mx=x; } q[k]= mx-mn>0.6 ? c[k] : s/n; } } // tremido de borda é médio; movimento real mantém o frame
-        else q=await getBase(L,i);
+        else q=await getRef(L,i);
         const m=finish(q,W,H,P);
         if(!all) all=new Float32Array(W*H); for(let k=0;k<m.length;k++) if(m[k]>all[k]) all[k]=m[k];
         const u8=toU8(m,P.invert); out.png[L.id][i]=await pngGray(u8,W,H); out.thumbs[L.id][i]=await toThumb(toU8(m,false));
         let s=0; for(let k=0;k<m.length;k+=97) s+=m[k]; out.cov[L.id][i]=s/(m.length/97);
       }
       const ua=toU8(all||new Float32Array(W*H),P.invert); out.all[i]=await pngGray(ua,W,H); out.allThumbs[i]=await toThumb(toU8(all||new Float32Array(W*H),false));
-      for(const k of [...base_.keys()]){ const fi=+k.split(":")[1]; if(fi<i-P.smooth) base_.delete(k); }
-      for(const k of [...rvmCache.keys()]) if(k<i-P.smooth-1) rvmCache.delete(k);
+      const keep=P.smooth+rb+1;
+      for(const k of [...base_.keys()]){ const fi=+k.split(":")[1]; if(fi<i-keep) base_.delete(k); }
+      for(const k of [...ref_.keys()]){ const fi=+k.split(":")[1]; if(fi<i-keep) ref_.delete(k); }
+      for(const k of [...rvmCache.keys()]) if(k<i-keep-1) rvmCache.delete(k);
       setBar(0.9+0.06*(i+1)/N); if(i%6===0) setStatus(`Montando ${i+1}/${N}…`);
     }
     st.out=out;
@@ -203,8 +217,9 @@ async function assemble(){
     const items=[[true,`${N} de ${N} frames em cada camada, mesmos tempos e resolução ${W}×${H}`],[!$("#outMp4").checked||enc===N, $("#outMp4").checked?`MP4 com ${enc} frames`:"MP4 desligado"],
       [!st.suspects.length, st.suspects.length?`Revise os frames ${st.suspects.slice(0,10).join(", ")}${st.suspects.length>10?"…":""} (marcados em amarelo na linha do tempo)`:"Sem saltos de área entre frames"]];
     for(const [y,t] of items){ const d=document.createElement("div"); d.className=y?"":"n"; d.textContent=t; ck.append(d); }
+    setStatus("Analisando a qualidade…"); await analyzeAll();
     setBar(1); $("#saveBtn").disabled=false; $("#finishBtn").disabled=false;
-    setStatus(`Pronto. Rastreamento ${fmtTime(run.trackTime||0)}, montagem ${fmtTime((performance.now()-t0)/1000)}. Baixe o ZIP no topo.`);
+    setStatus(`Pronto. Rastreamento ${fmtTime(run.trackTime||0)}, montagem ${fmtTime((performance.now()-t0)/1000)}.${st.quality?` Nota ${st.quality.score}/100 (aba Refino).`:""} Baixe o ZIP no topo.`);
     drawTimeline(); drawView();
   } finally { st.running=false; uiRunning(false); }
 }
@@ -228,4 +243,25 @@ function projectJson(){
     objetos: st.objs.map(o=>({id:o.id, camada:o.layer, termo:o.k>=0? terms[o.k]?.en : null, subtrai:o.sign<0, ligado:o.active, nascimento:o.fb, caixa:o.box.map(Math.round),
       pins:pinsFor(o).map(p=>({x:Math.round(p.x), y:Math.round(p.y), entra:p.l===1})), so_pins:!!o.pinOnly, peca_de:o.parent||null})),
     novos_objetos: st.sel==="all", parametros: readParams() };
+}
+
+/* ---- etapa 2: análise de qualidade (ilhas, furos, piscadas, borda × imagem) ---- */
+async function analyzeAll(){
+  const O=st.out, run=st.run, v=st.video; if(!O||!run) return null;
+  const tw=O.tw, th=O.th, N=run.N, gx=new OffscreenCanvas(tw,th).getContext("2d",{willReadFrequently:true});
+  const layers=run.layers.map(layerById).filter(Boolean), per=[];
+  for(let i=0;i<N;i++){
+    const bm=await createImageBitmap(run.frames[i]); gx.drawImage(bm,0,0,tw,th); bm.close();
+    const d=gx.getImageData(0,0,tw,th).data, gray=new Float32Array(tw*th); for(let k=0,j=0;k<gray.length;k++,j+=4) gray[k]=(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])/255;
+    const fr={i, isl:0, hole:0, blip:0, edge:1, fg:0};
+    for(const L of layers){ const T=O.thumbs[L.id]; const a=analyzeThumb(T[i], T[i-1], T[i+1], gray, tw, th); if(!a.fg) continue;
+      fr.isl=Math.max(fr.isl,a.isl); fr.hole=Math.max(fr.hole,a.hole); fr.blip=Math.max(fr.blip,a.blip); fr.edge=Math.min(fr.edge,a.edge); fr.fg+=a.fg; }
+    // nota: 100 menos penalidades (cada critério tem um teto)
+    fr.pIsl=Math.min(25, fr.isl*400); fr.pHole=Math.min(15, fr.hole*300); fr.pBlip=Math.min(35, fr.blip*350); fr.pEdge=Math.min(25, Math.max(0,0.85-fr.edge)*60);
+    fr.score=fr.fg? Math.round(100-fr.pIsl-fr.pHole-fr.pBlip-fr.pEdge) : 100; per.push(fr);
+    if(i%10===0) await sleep(0);
+  }
+  const avg=k=>per.reduce((s,f)=>s+f[k],0)/Math.max(1,per.length);
+  const res={per, score:Math.round(avg("score")), isl:avg("pIsl"), hole:avg("pHole"), blip:avg("pBlip"), edge:avg("pEdge")};
+  st.quality=res; renderQuality(); drawTimeline(); return res;
 }

@@ -177,3 +177,57 @@ const rdC={}; function rdCtx(W,H){ const k=W+"x"+H; return rdC[k] ||= new Offscr
 async function pngToFloat(blob, W, H){ if(!blob) return new Float32Array(W*H); const ctx=rdCtx(W,H), bm=await createImageBitmap(blob); ctx.clearRect(0,0,W,H); ctx.drawImage(bm,0,0); bm.close();
   const d=ctx.getImageData(0,0,W,H).data, q=new Float32Array(W*H); for(let i=0,j=0;i<q.length;i++,j+=4) q[i]=d[j]/255; return q; }
 const f2u8 = q => { const u=new Uint8Array(q.length); for(let i=0;i<q.length;i++) u[i]=Math.round(clamp(q[i],0,1)*255); return u; };
+
+/* ---- pincel: o traço vira um "palpite" de máscara para o SAM encaixar nas bordas da imagem ---- */
+function strokeLogits(stroke, E){
+  const c=new OffscreenCanvas(256,256), x=c.getContext("2d",{willReadFrequently:true}), k=E.s/4;
+  x.fillStyle="#000"; x.fillRect(0,0,256,256); x.strokeStyle="#fff"; x.fillStyle="#fff"; x.lineCap="round"; x.lineJoin="round"; x.lineWidth=Math.max(1,2*stroke.r*k);
+  const P=stroke.pts.map(p=>[(p.x-E.rect.x)*k,(p.y-E.rect.y)*k]);
+  x.beginPath(); P.forEach(([a,b],i)=>i?x.lineTo(a,b):x.moveTo(a,b)); if(P.length===1){ x.arc(P[0][0],P[0][1],stroke.r*k,0,7); x.fill(); } else x.stroke();
+  const d=x.getImageData(0,0,256,256).data, out=new Float32Array(65536);
+  for(let i=0;i<65536;i++) out[i]= d[i*4]>127 ? 6 : -4;
+  return out;
+}
+function strokeBox(stroke, W, H){ let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9; for(const p of stroke.pts){ x1=Math.min(x1,p.x-stroke.r); y1=Math.min(y1,p.y-stroke.r); x2=Math.max(x2,p.x+stroke.r); y2=Math.max(y2,p.y+stroke.r); }
+  return [clamp(x1,0,W),clamp(y1,0,H),clamp(x2,0,W),clamp(y2,0,H)]; }
+function strokeSamples(stroke, n){ const P=stroke.pts; if(P.length<=n) return P.slice(); const out=[]; for(let i=0;i<n;i++) out.push(P[Math.round(i*(P.length-1)/(n-1))]); return out; }
+
+/* ---- componentes conexos (8 vizinhos para frente, 4 para fundo) ---- */
+function labelCC(bin, w, h, fg){
+  const n=w*h, lab=new Int32Array(n), par=[0]; let next=1;
+  const find=a=>{ while(par[a]!==a){ par[a]=par[par[a]]; a=par[a]; } return a; };
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x; if(bin[i]!==fg) continue; const nb=[];
+    if(x>0&&bin[i-1]===fg) nb.push(lab[i-1]); if(y>0&&bin[i-w]===fg) nb.push(lab[i-w]);
+    if(fg){ if(x>0&&y>0&&bin[i-w-1]) nb.push(lab[i-w-1]); if(x<w-1&&y>0&&bin[i-w+1]) nb.push(lab[i-w+1]); }
+    if(!nb.length){ par.push(next); lab[i]=next++; } else { let m=find(nb[0]); for(const b of nb){ const r=find(b); if(r<m) m=r; } for(const b of nb){ const r=find(b); if(r!==m) par[r]=m; } lab[i]=m; } }
+  const area=new Map(), border=new Set();
+  for(let i=0;i<n;i++) if(lab[i]){ const r=find(lab[i]); lab[i]=r; area.set(r,(area.get(r)||0)+1); }
+  for(let x=0;x<w;x++){ border.add(lab[x]); border.add(lab[(h-1)*w+x]); } for(let y=0;y<h;y++){ border.add(lab[y*w]); border.add(lab[y*w+w-1]); }
+  return {lab, area, border};
+}
+/* refino de um frame: tira ilhas e fecha furos (em % da área da máscara), dentro da caixa da máscara */
+function cleanFrame(q, W, H, islPct, holePct){
+  let x1=W,y1=H,x2=-1,y2=-1; for(let y=0;y<H;y+=2) for(let x=0;x<W;x+=2) if(q[y*W+x]>=0.5){ if(x<x1)x1=x; if(x>x2)x2=x; if(y<y1)y1=y; if(y>y2)y2=y; }
+  if(x2<0) return q; x1=Math.max(0,x1-4); y1=Math.max(0,y1-4); x2=Math.min(W,x2+5); y2=Math.min(H,y2+5);
+  const w=x2-x1, h=y2-y1, bin=new Uint8Array(w*h); let fgA=0;
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const v=q[(y1+y)*W+x1+x]>=0.5?1:0; bin[y*w+x]=v; fgA+=v; }
+  if(islPct>0){ const {lab,area}=labelCC(bin,w,h,1), lim=islPct/100*fgA;
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x, r=lab[i]; if(r && area.get(r)<lim){ q[(y1+y)*W+x1+x]=0; bin[i]=0; } } }
+  if(holePct>0){ const {lab,area,border}=labelCC(bin,w,h,0), lim=holePct/100*fgA;
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){ const i=y*w+x, r=lab[i]; if(r && !border.has(r) && area.get(r)<lim) q[(y1+y)*W+x1+x]=1; } }
+  // borda: some resto suave de ilha removida (< 0.5 sem vizinho forte)
+  return q;
+}
+/* análise de um frame (em miniatura): ilhas, furos, piscada e borda × imagem */
+function analyzeThumb(m, prev, next, gray, tw, th){
+  const n=tw*th, bin=new Uint8Array(n); let fg=0; for(let i=0;i<n;i++){ bin[i]=m[i]>=128?1:0; fg+=bin[i]; }
+  if(fg<20) return {fg, isl:0, hole:0, blip:0, edge:1};
+  const F=labelCC(bin,tw,th,1); let big=0; for(const a of F.area.values()) if(a>big) big=a;
+  let isl=0; for(const a of F.area.values()) if(a<0.15*big) isl+=a;
+  const B=labelCC(bin,tw,th,0); let hole=0; for(const [r,a] of B.area) if(!B.border.has(r) && a<0.05*fg) hole+=a;
+  let blip=0; if(prev&&next) for(let i=0;i<n;i++){ const p=prev[i]>=128, q=next[i]>=128; if(p===q && p!==!!bin[i]) blip++; }
+  let edges=0, good=0;
+  for(let y=1;y<th-1;y++) for(let x=1;x<tw-1;x++){ const i=y*tw+x; if(!bin[i]) continue; if(bin[i-1]&&bin[i+1]&&bin[i-tw]&&bin[i+tw]) continue; edges++;
+    let g=0; for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){ const j=i+dy*tw+dx; const gx=gray[j+1]-gray[j-1], gy=gray[j+tw]-gray[j-tw]; const v=Math.abs(gx)+Math.abs(gy); if(v>g) g=v; } if(g>0.07) good++; }
+  return {fg, isl:isl/fg, hole:hole/fg, blip:blip/fg, edge:edges?good/edges:1};
+}

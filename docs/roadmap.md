@@ -51,3 +51,15 @@ nesta máquina — só GPU. Recorte nunca amplia mais que 1,25×.
 
 Testes (navegador sem GPU): carros vistos de cima (40 frames, 2 carros entrando/saindo), palestrante com microfone
 (correção no frame 8 propagada para 0–10), pessoa com matting. Não disponível: SAM 3 (pesos com acesso restrito).
+
+## Feito (v3.1 — pincel e refino)
+- **Pincel + / Pincel −** (atalhos G / R, `[` `]` para o tamanho, Alt inverte): pinta-se por cima, estilo Roto Brush.
+  O traço vira a máscara inicial do SAM (mask_in) mais pontos ao longo dele, então encaixa na borda da imagem.
+  Verde sem objeto embaixo cria um objeto novo na camada ativa; vermelho tira do objeto que o traço cobre.
+  Nasce no frame pintado e segue para frente e para trás.
+- **Etapa Refinar** (aba Refino): depois de gerar, cada frame recebe uma nota 0–100 com quatro critérios —
+  ilhas soltas, furos, piscadas (pixel que acende/apaga num frame só) e borda × imagem (a borda da máscara cai
+  sobre uma borda real do vídeo?). Lista dos piores frames com o motivo; faixa vermelha/âmbar na linha do tempo.
+- **Refinar máscaras**: remove ilhas menores que X% do objeto, fecha furos, vota piscadas por maioria em ±N frames
+  e cola a borda nas bordas da imagem (filtro guiado). Recalcula a nota e mostra antes → depois.
+  Segure **C** ou o botão "Antes do refino" para comparar; vista **Contorno** desenha a borda da máscara sobre o vídeo.

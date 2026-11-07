@@ -8,6 +8,12 @@ com o mesmo número de frames, os mesmos tempos e a mesma resolução do origina
 - **Motor pesado** (`engine/deleon_mask.py`) — YOLOE + SAM 2.1 com memória, ProRes, PNG, recorte com
   alfa. Roda na nuvem do Claude ou no seu computador (CUDA / Apple MPS).
 
+## Fluxo no app
+1. **Vídeo** — abra o arquivo. 2. **Marcar** — escreva o que quer ("pessoa, -microfone"), clique pins, caixas ou
+pinte com o **Pincel +** (verde, entra) e **Pincel −** (vermelho, sai). 3. **Rastrear** — gera todos os frames.
+4. **Refinar** — nota por frame, piores frames, limpeza de ilhas/furos/piscadas e borda colada na imagem, com
+comparação antes/depois. 5. **Exportar** — ZIP com MP4 + PNG por camada, ou projeto para o motor pesado.
+
 ## Estrutura
 | Pasta | O quê |
 |---|---|
