@@ -957,7 +957,7 @@ async function assemble(){
   try{
     const layers=run.layers.map(layerById).filter(Boolean), zip=new JSZip(), t0=performance.now();
     const tw=Math.min(480,W), th=Math.round(tw*H/W), tctx=new OffscreenCanvas(tw,th).getContext("2d",{willReadFrequently:true}), mc=new OffscreenCanvas(W,H), mx=mc.getContext("2d"), mimg=mx.createImageData(W,H);
-    const out={thumbs:{}, cov:{}, png:{}, all:[], allThumbs:[], tw, th, refined:!!R};
+    const out={thumbs:{}, cov:{}, png:{}, all:[], allThumbs:[], tw, th, refined:!!st.refine};
     for(const L of layers){ out.thumbs[L.id]=new Array(N); out.cov[L.id]=new Array(N); out.png[L.id]=new Array(N); }
     const needRvm = layers.some(L=>L.matting); const rvmState={}; const cv=makeCanvases(W,H);
     const base_=new Map(); // cache de frames base (antes da estabilização) por camada
