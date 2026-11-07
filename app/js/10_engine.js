@@ -114,5 +114,5 @@ function upgradeSam(kind){ return samLoading[kind] ||= (async()=>{
 async function loadRvm(){
   if(st.rvm) return st.rvm;
   const b=await fetchModel("rvm","matting de pessoas",fg);
-  const [sess,ep]=await makeSession(b,"o matting de pessoas"); st.rvm={sess,ep}; return st.rvm;
+  const [sess,ep]=await makeSession(b,"o matting de pessoas"); st.rvm={sess,ep,bytes:b}; return st.rvm;
 }

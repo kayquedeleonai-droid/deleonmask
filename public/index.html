@@ -519,7 +519,7 @@ function upgradeSam(kind){ return samLoading[kind] ||= (async()=>{
 async function loadRvm(){
   if(st.rvm) return st.rvm;
   const b=await fetchModel("rvm","matting de pessoas",fg);
-  const [sess,ep]=await makeSession(b,"o matting de pessoas"); st.rvm={sess,ep}; return st.rvm;
+  const [sess,ep]=await makeSession(b,"o matting de pessoas"); st.rvm={sess,ep,bytes:b}; return st.rvm;
 }
 
 /* ============ vídeo: demux + decode exatos ============ */
@@ -716,7 +716,13 @@ async function rvmStep(state, cv, W, H){
   for(let i=0,p=0;i<A;i++,p+=4){ src[i]=d[p]/255; src[A+i]=d[p+1]/255; src[2*A+i]=d[p+2]/255; }
   const z=()=>new ort.Tensor("float32",new Float32Array(1),[1,1,1,1]);
   const ratio=Math.min(1, 512/Math.max(w,h));
-  const r=await runOrt(st.rvm.sess,{src:new ort.Tensor("float32",src,[1,3,h,w]), r1i:state.r1||z(), r2i:state.r2||z(), r3i:state.r3||z(), r4i:state.r4||z(), downsample_ratio:new ort.Tensor("float32",new Float32Array([ratio]),[1])});
+  const feeds=()=>({src:new ort.Tensor("float32",src,[1,3,h,w]), r1i:state.r1||z(), r2i:state.r2||z(), r3i:state.r3||z(), r4i:state.r4||z(), downsample_ratio:new ort.Tensor("float32",new Float32Array([ratio]),[1])});
+  let r; try{ r=await runOrt(st.rvm.sess,feeds()); }
+  catch(e){ // algumas placas não rodam o AveragePool do RVM na WebGPU: refaz no processador
+    if(st.rvm.ep!=="webgpu") throw e; console.warn("RVM na WebGPU falhou, indo para WASM", e);
+    note("Matting de pessoas no processador (a placa de vídeo não suporta esse modelo).");
+    const [sess,ep]=await makeSession(st.rvm.bytes,"o matting de pessoas",["wasm"]); try{ st.rvm.sess.release?.(); }catch(_){} st.rvm.sess=sess; st.rvm.ep=ep;
+    state.r1=state.r2=state.r3=state.r4=null; r=await runOrt(st.rvm.sess,feeds()); }
   state.r1=r.r1o; state.r2=r.r2o; state.r3=r.r3o; state.r4=r.r4o;
   const pha=r.pha.data; if(w===W && h===H) return Float32Array.from(pha);
   // amplia o alfa para a resolução cheia
